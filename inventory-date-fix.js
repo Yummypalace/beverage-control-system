@@ -20,8 +20,47 @@
     fresh.onclick=handler;
   }
 
+  function ensureOutTypeField(){
+    const grid=document.querySelector('#stockDialog .grid2');
+    if(!grid||document.getElementById('stockOutTypeWrap'))return;
+    const label=document.createElement('label');
+    label.id='stockOutTypeWrap';
+    label.className='hidden';
+    label.innerHTML=`出库类型
+      <select id="stockOutType">
+        <option value="NORMAL">正常销售</option>
+        <option value="CREDIT">签单</option>
+        <option value="FOC">FOC</option>
+        <option value="KITCHEN">厨房使用</option>
+        <option value="STAFF">员工使用</option>
+        <option value="ENT">招待 / ENT</option>
+        <option value="OTHER">其他</option>
+      </select>`;
+    const seller=document.getElementById('sellerWrap');
+    grid.insertBefore(label,seller||null);
+  }
+
+  function syncOutTypeVisibility(){
+    const wrap=document.getElementById('stockOutTypeWrap');
+    const select=document.getElementById('stockOutType');
+    const action=document.getElementById('stockAction')?.value||'';
+    if(wrap)wrap.classList.toggle('hidden',action!=='OUT');
+    if(action!=='OUT'&&select)select.value='NORMAL';
+  }
+
   function install(){
     if(installed)return;installed=true;
+
+    ensureOutTypeField();
+    const actionSelect=document.getElementById('stockAction');
+    if(actionSelect)actionSelect.addEventListener('change',syncOutTypeVisibility);
+    const previousOpenStock=openStock;
+    openStock=function(id,action){
+      previousOpenStock(id,action);
+      const type=document.getElementById('stockOutType');
+      if(type)type.value='NORMAL';
+      syncOutTypeVisibility();
+    };
 
     saveStock=async function(){
       const x=items.find(i=>i.id===stockItemId);if(!x)return;
@@ -30,6 +69,7 @@
 
       const action=document.getElementById('stockAction').value;
       const loc=document.getElementById('stockLocation').value;
+      const outType=action==='OUT'?(document.getElementById('stockOutType')?.value||'NORMAL'):null;
       const qty=Number(document.getElementById('stockQty').value);
       if(!Number.isFinite(qty)||qty<0)return alert('请输入正确数量');
 
@@ -60,6 +100,7 @@
         item_name:x.name,
         action,
         quantity:qty,
+        out_type:outType,
         note:logNote,
         user_email:userEmail(),
         operation_date:date
