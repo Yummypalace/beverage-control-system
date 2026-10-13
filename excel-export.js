@@ -11,6 +11,37 @@
   function monthEnd(month){const p=String(month).split('-').map(Number);if(p.length!==2||!p[0]||!p[1])return '';return new Date(Date.UTC(p[0],p[1],0)).toISOString().slice(0,10);}
   function reverseLogSort(a,b){const da=dateOf(a),db=dateOf(b);if(da!==db)return db.localeCompare(da);const ca=String(a.created_at||''),cb=String(b.created_at||'');if(ca!==cb)return cb.localeCompare(ca);return Number(b.id||0)-Number(a.id||0);}
   function locationOf(note){const s=String(note||'');if(s.startsWith('冰箱｜'))return 'fridge';if(s.startsWith('仓库｜'))return 'warehouse';return '';}
+  function actionLabel(action){return ({IN:'入库',OUT:'出库',TRANSFER:'移库',ADJUST:'盘点',CREATE:'新增',EDIT:'编辑'})[String(action||'')]||String(action||'');}
+  function parseBusinessNote(r){
+    const raw=String(r?.note||'').trim(),action=String(r?.action||'');
+    if(!raw)return {location:'',note:''};
+    const parts=raw.split('｜').map(x=>String(x).trim());
+    let location='';
+    if(parts.length&&(/^(冰箱|仓库)$/.test(parts[0])||parts[0].includes('→')))location=parts.shift();
+    if(action==='ADJUST'){
+      const userParts=parts.filter(x=>x&&x!=='盘点调整'&&!/^调整前\s/.test(x)&&!/^调整后\s/.test(x));
+      return {location,note:userParts.join('｜').trim()};
+    }
+    if(action==='TRANSFER'){
+      if(!location&&parts.length&&parts[0].includes('→'))location=parts.shift();
+      return {location,note:parts.join('｜').trim()};
+    }
+    if(action==='IN'||action==='OUT')return {location,note:parts.join('｜').trim()};
+    return {location,note:(location?parts.join('｜'):raw).trim()};
+  }
+  function meaningfulBusinessNote(r){
+    const action=String(r?.action||'');
+    if(r?.correction_ref||action==='CREATE'||action==='EDIT')return false;
+    return !!parseBusinessNote(r).note;
+  }
+  function noteCategory(note){
+    const raw=String(note||'').trim(),s=raw.toLowerCase().replace(/\s+/g,' ');
+    if(/(^|[^a-z])foc([^a-z]|$)/i.test(raw)||s.includes('complimentary')||raw.includes('免费'))return 'FOC';
+    if(raw.includes('厨房')||s.includes('kitchen'))return '厨房使用';
+    if(s.includes('no paid')||s.includes('not paid')||s.includes('unpaid')||raw.includes('没paid')||raw.includes('没 paid')||raw.includes('未付款')||raw.includes('没付款')||raw.includes('员工'))return '未付款 / 员工使用';
+    if(/(^|[^a-z])ent([\s\-_/]|$)/i.test(raw)||s.includes('entertain')||raw.includes('招待'))return '招待 / ENT';
+    return '其他';
+  }
   function parseEditBefore(note){const s=String(note||'');const m=s.match(/调整前\s*冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);return m?{fridge:Number(m[1]),warehouse:Number(m[2])}:null;}
   function parseAdjustBefore(note){const s=String(note||'');const m=s.match(/调整前\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);return m?Number(m[1]):null;}
   function addWarning(state,text){if(!state.warnings.includes(text))state.warnings.push(text);}
@@ -61,8 +92,9 @@
     const actions={IN:'入库',OUT:'出库',TRANSFER:'移库',ADJUST:'盘点',CREATE:'新增',EDIT:'编辑'};
     const logRows=allLogs.filter(r=>inRange(r,mode,value));const comRows=allCommissions.filter(r=>inRange(r,mode,value));
     const logs=logRows.map(r=>({'日期':dateOf(r),'饮料':r.item_name||'','操作':actions[r.action]||r.action,'数量':Number(r.quantity||0),'备注':r.note||'','操作账号':r.user_email||''}));
+    const outNotes=logRows.filter(meaningfulBusinessNote).map(r=>{const p=parseBusinessNote(r);return {'日期':dateOf(r),'饮料':r.item_name||'','用途分类':noteCategory(p.note),'操作':actionLabel(r.action),'数量':Number(r.quantity||0),'位置':p.location||'','备注':p.note,'操作账号':r.user_email||''};});
     const commission=comRows.map(r=>({'日期':dateOf(r),'员工':r.seller_name||'','饮料':r.item_name||'','销售数量':Number(r.quantity||0),'单位提成 SGD':Number(r.commission_per_unit||0),'提成金额 SGD':Number(r.commission_amount||0),'备注':r.note||'','录入账号':r.user_email||''}));
-    const wb=XLSX.utils.book_new();addSheet(wb,inventorySheet,inventory);addSheet(wb,'库存记录',logs);addSheet(wb,'销售提成',commission);const label=mode==='all'?'全部':value;XLSX.writeFile(wb,`饮料库存数据_${label}.xlsx`);document.getElementById('exportExcelDialog').close();if(uncertain>0)alert(`Excel 已导出。\n其中 ${uncertain} 个品项含有旧版编辑/盘点记录，无法百分百确认调整前库存，已在“数据状态”栏标记为“需核对”。`);
+    const wb=XLSX.utils.book_new();addSheet(wb,inventorySheet,inventory);addSheet(wb,'库存记录',logs);addSheet(wb,'出入库备注',outNotes);addSheet(wb,'销售提成',commission);const label=mode==='all'?'全部':value;XLSX.writeFile(wb,`饮料库存数据_${label}.xlsx`);document.getElementById('exportExcelDialog').close();if(uncertain>0)alert(`Excel 已导出。\n其中 ${uncertain} 个品项含有旧版编辑/盘点记录，无法百分百确认调整前库存，已在“数据状态”栏标记为“需核对”。`);
   }catch(e){alert('导出失败：'+String(e.message||e));}finally{btn.disabled=false;btn.textContent='导出';}}
   function addSheet(wb,name,rows){const ws=XLSX.utils.json_to_sheet(rows.length?rows:[{'暂无数据':''}]);const range=XLSX.utils.decode_range(ws['!ref']),widths=[];for(let c=range.s.c;c<=range.e.c;c++){let max=10;for(let r=range.s.r;r<=range.e.r;r++){const cell=ws[XLSX.utils.encode_cell({r,c})];if(cell&&cell.v!=null)max=Math.max(max,String(cell.v).length+2);}widths.push({wch:Math.min(max,42)});}ws['!cols']=widths;ws['!autofilter']={ref:ws['!ref']};XLSX.utils.book_append_sheet(wb,ws,name);}
   wait();
