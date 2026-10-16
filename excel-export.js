@@ -51,39 +51,59 @@
   function parseEditAfter(note){const s=String(note||'');let m=s.match(/调整后\s*冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);if(m)return{fridge:Number(m[1]),warehouse:Number(m[2])};m=s.match(/编辑资料（冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)）/);return m?{fridge:Number(m[1]),warehouse:Number(m[2])}:null;}
   function historicalInventoryRows(allLogs,cutoff){
     const states=new Map();
-    items.forEach(x=>states.set(String(x.id),{item:x,fridge:0,warehouse:0,exists:false,baseline:false,warnings:[]}));
+    const logsByItem=new Map();
+    (allLogs||[]).forEach(r=>{
+      const key=String(r.item_id||'');
+      if(!logsByItem.has(key))logsByItem.set(key,[]);
+      logsByItem.get(key).push(r);
+    });
 
-    // 优先从“新增时的明确库存”向前计算到目标日期。这样旧日期不会受今天库存或后续旧版编辑记录影响。
-    const pastLogs=(allLogs||[]).filter(r=>dateOf(r)<=cutoff).sort(forwardLogSort);
-    pastLogs.forEach(r=>{
-      const s=states.get(String(r.item_id||''));if(!s)return;
-      const q=Number(r.quantity||0),action=String(r.action||''),loc=locationOf(r.note),note=String(r.note||'');
-      if(action==='CREATE'){
-        const created=parseCreateState(note);
-        s.exists=true;
-        if(created){s.fridge=created.fridge;s.warehouse=created.warehouse;s.baseline=true;}
-        else addWarning(s,'新增记录未保存初始库存');
-        return;
-      }
-      if(!s.baseline)return;
-      if(action==='IN'){
-        if(loc==='fridge')s.fridge+=q;else if(loc==='warehouse')s.warehouse+=q;else addWarning(s,'入库位置无法识别');
-      }else if(action==='OUT'){
-        if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,'出库位置无法识别');
-      }else if(action==='TRANSFER'){
-        if(note.startsWith('仓库 → 冰箱')){s.fridge+=q;s.warehouse-=q;}
-        else if(note.startsWith('冰箱 → 仓库')){s.fridge-=q;s.warehouse+=q;}
-        else addWarning(s,'移库方向无法识别');
-      }else if(action==='EDIT'){
-        const after=parseEditAfter(note);
-        if(after){s.fridge=after.fridge;s.warehouse=after.warehouse;}
-      }else if(action==='ADJUST'){
-        if(loc==='fridge'||loc==='warehouse')s[loc]=q;
-        else addWarning(s,'盘点位置无法识别');
+    items.forEach(x=>{
+      const key=String(x.id);
+      const itemLogs=(logsByItem.get(key)||[]);
+      const eligible=itemLogs.filter(r=>dateOf(r)<=cutoff);
+      const creates=eligible.filter(r=>String(r.action||'')==='CREATE').sort((a,b)=>{
+        const ca=String(a.created_at||''),cb=String(b.created_at||'');
+        if(ca!==cb)return ca.localeCompare(cb);
+        return Number(a.id||0)-Number(b.id||0);
+      });
+
+      if(creates.length){
+        const create=creates[0];
+        const initial=parseCreateState(create.note)||{fridge:0,warehouse:0};
+        const s={item:x,fridge:Number(initial.fridge||0),warehouse:Number(initial.warehouse||0),exists:true,warnings:[]};
+        const anchorCreated=String(create.created_at||'');
+        eligible
+          .filter(r=>r!==create && String(r.created_at||'')>=anchorCreated)
+          .sort((a,b)=>{
+            const ca=String(a.created_at||''),cb=String(b.created_at||'');
+            if(ca!==cb)return ca.localeCompare(cb);
+            return Number(a.id||0)-Number(b.id||0);
+          })
+          .forEach(r=>{
+            const q=Number(r.quantity||0),action=String(r.action||''),loc=locationOf(r.note),note=String(r.note||'');
+            if(action==='CREATE')return;
+            if(action==='IN'){
+              if(loc==='fridge')s.fridge+=q;else if(loc==='warehouse')s.warehouse+=q;else addWarning(s,'入库位置无法识别');
+            }else if(action==='OUT'){
+              if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,'出库位置无法识别');
+            }else if(action==='TRANSFER'){
+              if(note.startsWith('仓库 → 冰箱')){s.fridge+=q;s.warehouse-=q;}
+              else if(note.startsWith('冰箱 → 仓库')){s.fridge-=q;s.warehouse+=q;}
+              else addWarning(s,'移库方向无法识别');
+            }else if(action==='EDIT'){
+              const after=parseEditAfter(note);
+              if(after){s.fridge=after.fridge;s.warehouse=after.warehouse;}
+            }else if(action==='ADJUST'){
+              if(loc==='fridge'||loc==='warehouse')s[loc]=q;
+              else addWarning(s,'盘点位置无法识别');
+            }
+          });
+        states.set(key,s);
       }
     });
 
-    // 没有可靠“新增库存”基准的旧品项，才退回使用当前库存向后倒推。
+    // 没有可用新增基准的品项，才使用当前库存向后倒推。
     const fallback=new Map();
     items.forEach(x=>fallback.set(String(x.id),{item:x,fridge:Number(x.fridge_quantity||0),warehouse:Number(x.warehouse_quantity||0),exists:true,warnings:[]}));
     const futureLogs=(allLogs||[]).filter(r=>dateOf(r)>cutoff).sort(reverseLogSort);
@@ -103,22 +123,19 @@
       }else if(action==='EDIT'){
         const before=parseEditBefore(note);
         if(before){s.fridge=before.fridge;s.warehouse=before.warehouse;}
-        else addWarning(s,'旧编辑记录未保存调整前库存');
       }else if(action==='ADJUST'){
         const before=parseAdjustBefore(note);
         if(before!=null&&loc){s[loc]=before;}
-        else addWarning(s,'旧盘点记录未保存调整前库存');
       }
     });
 
     const rows=[];let uncertain=0;
-    [...states.values()].sort((a,b)=>String(a.item.name).localeCompare(String(b.item.name))).forEach(s=>{
-      let chosen=s;
-      if(!s.baseline)chosen=fallback.get(String(s.item.id));
+    [...items].sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(x=>{
+      const key=String(x.id);
+      const chosen=states.get(key)||fallback.get(key);
       if(!chosen||!chosen.exists)return;
       if(chosen.fridge<0||chosen.warehouse<0)addWarning(chosen,'历史记录与库存变动不一致');
       if(chosen.warnings.length)uncertain++;
-      const x=chosen.item;
       rows.push({'库存日期':cutoff,'名称':x.name,'类别':x.category||'','规格':x.spec||'','单位':x.unit||'','冰箱库存':Number(chosen.fridge),'仓库库存':Number(chosen.warehouse),'总库存':Number(chosen.fridge)+Number(chosen.warehouse),'最低库存':Number(x.min_quantity||0),'成本价 SGD':Number(x.cost_price||0),'单位提成 SGD':Number(x.commission_per_unit||0),'数据状态':chosen.warnings.length?'需核对：'+chosen.warnings.join('；'):'历史还原'});
     });
     return {rows,uncertain};
