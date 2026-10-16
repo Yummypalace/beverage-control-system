@@ -108,50 +108,40 @@
 
       const fq=Number(document.getElementById('itemFridgeQty').value||0);
       const wq=Number(document.getElementById('itemWarehouseQty').value||0);
-      const p={
-        name:document.getElementById('itemName').value.trim(),
-        category:document.getElementById('itemCategory').value,
-        spec:document.getElementById('itemSpec').value.trim(),
-        unit:document.getElementById('itemUnit').value.trim()||'瓶',
-        fridge_quantity:fq,
-        warehouse_quantity:wq,
-        quantity:fq+wq,
-        min_quantity:Number(document.getElementById('itemMin').value||0),
-        cost_price:Number(document.getElementById('itemCost').value||0),
-        commission_per_unit:Number(document.getElementById('itemCommission').value||0),
-        updated_at:new Date().toISOString()
-      };
+      const name=document.getElementById('itemName').value.trim();
+      if(!name)return alert('请输入名称');
+      if(!Number.isFinite(fq)||fq<0||!Number.isFinite(wq)||wq<0)return alert('库存数量不能小于 0');
 
-      if(!p.name)return alert('请输入名称');
-      const isEdit=!!editingId;
-      const beforeItem=isEdit?items.find(i=>i.id===editingId):null;
-      const beforeF=beforeItem?fridge(beforeItem):0;
-      const beforeW=beforeItem?warehouse(beforeItem):0;
-      const r=isEdit
-        ?await sb.from('inventory_items').update(p).eq('id',editingId).select().single()
-        :await sb.from('inventory_items').insert(p).select().single();
+      const btn=document.getElementById('saveItemBtn');
+      if(btn?.disabled)return;
+      if(btn){btn.disabled=true;btn.textContent='保存中...';}
 
-      if(r.error)return alert('保存失败：'+r.error.message);
+      try{
+        const {data,error}=await sb.rpc('save_inventory_item_atomic',{
+          p_item:editingId||null,
+          p_name:name,
+          p_category:document.getElementById('itemCategory').value,
+          p_spec:document.getElementById('itemSpec').value.trim(),
+          p_unit:document.getElementById('itemUnit').value.trim()||'瓶',
+          p_fridge_quantity:fq,
+          p_warehouse_quantity:wq,
+          p_min_quantity:Number(document.getElementById('itemMin').value||0),
+          p_cost_price:Number(document.getElementById('itemCost').value||0),
+          p_commission_per_unit:Number(document.getElementById('itemCommission').value||0),
+          p_operation_date:date
+        });
 
-      const l=await sb.from('inventory_logs').insert({
-        item_id:r.data.id,
-        item_name:r.data.name,
-        action:isEdit?'EDIT':'CREATE',
-        quantity:fq+wq,
-        note:isEdit
-          ?`编辑资料（调整前 冰箱 ${beforeF} / 仓库 ${beforeW}；调整后 冰箱 ${fq} / 仓库 ${wq}）`
-          :`新增饮料（冰箱 ${fq} / 仓库 ${wq}）`,
-        user_email:userEmail(),
-        operation_date:date
-      });
+        if(error){
+          alert('保存失败：'+error.message+'\n资料和记录都没有改变。');
+          return;
+        }
 
-      if(l.error){
-        alert('资料已保存，但日期记录失败：'+l.error.message);
-        return;
+        document.getElementById('itemDialog').close();
+        editingId=null;
+        await loadAll();
+      }finally{
+        if(btn){btn.disabled=false;btn.textContent='保存';}
       }
-
-      document.getElementById('itemDialog').close();
-      await loadAll();
     };
 
     replaceButton('saveStockBtn',()=>saveStock());
