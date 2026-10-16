@@ -46,12 +46,49 @@
   function parseAdjustBefore(note){const s=String(note||'');const m=s.match(/调整前\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);return m?Number(m[1]):null;}
   function addWarning(state,text){if(!state.warnings.includes(text))state.warnings.push(text);}
   function currentInventoryRows(snapshotDate){return [...items].sort((a,b)=>String(a.name).localeCompare(String(b.name))).map(x=>({'库存日期':snapshotDate,'名称':x.name,'类别':x.category||'','规格':x.spec||'','单位':x.unit||'','冰箱库存':Number(x.fridge_quantity||0),'仓库库存':Number(x.warehouse_quantity||0),'总库存':Number(x.fridge_quantity||0)+Number(x.warehouse_quantity||0),'最低库存':Number(x.min_quantity||0),'成本价 SGD':Number(x.cost_price||0),'单位提成 SGD':Number(x.commission_per_unit||0),'数据状态':'当前库存'}));}
+  function forwardLogSort(a,b){const da=dateOf(a),db=dateOf(b);if(da!==db)return da.localeCompare(db);const ca=String(a.created_at||''),cb=String(b.created_at||'');if(ca!==cb)return ca.localeCompare(cb);return Number(a.id||0)-Number(b.id||0);}
+  function parseCreateState(note){const s=String(note||'');const m=s.match(/冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);return m?{fridge:Number(m[1]),warehouse:Number(m[2])}:null;}
+  function parseEditAfter(note){const s=String(note||'');let m=s.match(/调整后\s*冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);if(m)return{fridge:Number(m[1]),warehouse:Number(m[2])};m=s.match(/编辑资料（冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)）/);return m?{fridge:Number(m[1]),warehouse:Number(m[2])}:null;}
   function historicalInventoryRows(allLogs,cutoff){
     const states=new Map();
-    items.forEach(x=>states.set(String(x.id),{item:x,fridge:Number(x.fridge_quantity||0),warehouse:Number(x.warehouse_quantity||0),exists:true,warnings:[]}));
+    items.forEach(x=>states.set(String(x.id),{item:x,fridge:0,warehouse:0,exists:false,baseline:false,warnings:[]}));
+
+    // 优先从“新增时的明确库存”向前计算到目标日期。这样旧日期不会受今天库存或后续旧版编辑记录影响。
+    const pastLogs=(allLogs||[]).filter(r=>dateOf(r)<=cutoff).sort(forwardLogSort);
+    pastLogs.forEach(r=>{
+      const s=states.get(String(r.item_id||''));if(!s)return;
+      const q=Number(r.quantity||0),action=String(r.action||''),loc=locationOf(r.note),note=String(r.note||'');
+      if(action==='CREATE'){
+        const created=parseCreateState(note);
+        s.exists=true;
+        if(created){s.fridge=created.fridge;s.warehouse=created.warehouse;s.baseline=true;}
+        else addWarning(s,'新增记录未保存初始库存');
+        return;
+      }
+      if(!s.baseline)return;
+      if(action==='IN'){
+        if(loc==='fridge')s.fridge+=q;else if(loc==='warehouse')s.warehouse+=q;else addWarning(s,'入库位置无法识别');
+      }else if(action==='OUT'){
+        if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,'出库位置无法识别');
+      }else if(action==='TRANSFER'){
+        if(note.startsWith('仓库 → 冰箱')){s.fridge+=q;s.warehouse-=q;}
+        else if(note.startsWith('冰箱 → 仓库')){s.fridge-=q;s.warehouse+=q;}
+        else addWarning(s,'移库方向无法识别');
+      }else if(action==='EDIT'){
+        const after=parseEditAfter(note);
+        if(after){s.fridge=after.fridge;s.warehouse=after.warehouse;}
+      }else if(action==='ADJUST'){
+        if(loc==='fridge'||loc==='warehouse')s[loc]=q;
+        else addWarning(s,'盘点位置无法识别');
+      }
+    });
+
+    // 没有可靠“新增库存”基准的旧品项，才退回使用当前库存向后倒推。
+    const fallback=new Map();
+    items.forEach(x=>fallback.set(String(x.id),{item:x,fridge:Number(x.fridge_quantity||0),warehouse:Number(x.warehouse_quantity||0),exists:true,warnings:[]}));
     const futureLogs=(allLogs||[]).filter(r=>dateOf(r)>cutoff).sort(reverseLogSort);
     futureLogs.forEach(r=>{
-      const s=states.get(String(r.item_id||''));if(!s||!s.exists)return;
+      const s=fallback.get(String(r.item_id||''));if(!s||!s.exists)return;
       const q=Number(r.quantity||0),action=String(r.action||''),loc=locationOf(r.note),note=String(r.note||'');
       if(action==='IN'){
         if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,'入库位置无法识别');
@@ -73,13 +110,16 @@
         else addWarning(s,'旧盘点记录未保存调整前库存');
       }
     });
+
     const rows=[];let uncertain=0;
     [...states.values()].sort((a,b)=>String(a.item.name).localeCompare(String(b.item.name))).forEach(s=>{
-      if(!s.exists)return;
-      if(s.fridge<0||s.warehouse<0)addWarning(s,'历史记录与当前库存不一致');
-      if(s.warnings.length)uncertain++;
-      const x=s.item;
-      rows.push({'库存日期':cutoff,'名称':x.name,'类别':x.category||'','规格':x.spec||'','单位':x.unit||'','冰箱库存':Number(s.fridge),'仓库库存':Number(s.warehouse),'总库存':Number(s.fridge)+Number(s.warehouse),'最低库存':Number(x.min_quantity||0),'成本价 SGD':Number(x.cost_price||0),'单位提成 SGD':Number(x.commission_per_unit||0),'数据状态':s.warnings.length?'需核对：'+s.warnings.join('；'):'历史还原'});
+      let chosen=s;
+      if(!s.baseline)chosen=fallback.get(String(s.item.id));
+      if(!chosen||!chosen.exists)return;
+      if(chosen.fridge<0||chosen.warehouse<0)addWarning(chosen,'历史记录与库存变动不一致');
+      if(chosen.warnings.length)uncertain++;
+      const x=chosen.item;
+      rows.push({'库存日期':cutoff,'名称':x.name,'类别':x.category||'','规格':x.spec||'','单位':x.unit||'','冰箱库存':Number(chosen.fridge),'仓库库存':Number(chosen.warehouse),'总库存':Number(chosen.fridge)+Number(chosen.warehouse),'最低库存':Number(x.min_quantity||0),'成本价 SGD':Number(x.cost_price||0),'单位提成 SGD':Number(x.commission_per_unit||0),'数据状态':chosen.warnings.length?'需核对：'+chosen.warnings.join('；'):'历史还原'});
     });
     return {rows,uncertain};
   }
