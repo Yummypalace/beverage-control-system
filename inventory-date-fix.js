@@ -72,47 +72,34 @@
       const outType=action==='OUT'?(document.getElementById('stockOutType')?.value||'NORMAL'):null;
       const qty=Number(document.getElementById('stockQty').value);
       if(!Number.isFinite(qty)||qty<0)return alert('请输入正确数量');
+      if((action==='IN'||action==='OUT')&&qty<=0)return alert('数量必须大于 0');
 
-      const current=loc==='fridge'?fridge(x):warehouse(x);
-      let next=current;
-      if(action==='IN')next+=qty;
-      if(action==='OUT'){
-        if(qty>current)return alert((loc==='fridge'?'冰箱':'仓库')+'库存不足');
-        next-=qty;
+      const btn=document.getElementById('saveStockBtn');
+      if(btn?.disabled)return;
+      if(btn){btn.disabled=true;btn.textContent='处理中...';}
+
+      try{
+        const userNote=(document.getElementById('stockNote').value||'').trim();
+        const {data,error}=await sb.rpc('apply_inventory_change',{
+          p_item:x.id,
+          p_action:action,
+          p_location:loc,
+          p_quantity:qty,
+          p_operation_date:date,
+          p_note:userNote,
+          p_out_type:outType
+        });
+
+        if(error){
+          alert('库存操作失败：'+error.message+'\n库存和记录都没有改变。');
+          return;
+        }
+
+        document.getElementById('stockDialog').close();
+        await loadAll();
+      }finally{
+        if(btn){btn.disabled=false;btn.textContent='确认';}
       }
-      if(action==='ADJUST')next=qty;
-
-      const update=loc==='fridge'
-        ?{fridge_quantity:next,updated_at:new Date().toISOString()}
-        :{warehouse_quantity:next,updated_at:new Date().toISOString()};
-
-      const u=await sb.from('inventory_items').update(update).eq('id',x.id);
-      if(u.error)return alert('库存更新失败：'+u.error.message);
-
-      const locationName=loc==='fridge'?'冰箱':'仓库';
-      const userNote=(document.getElementById('stockNote').value||'').trim();
-      const logNote=action==='ADJUST'
-        ?`${locationName}｜盘点调整｜调整前 ${current}｜调整后 ${next}${userNote?'｜'+userNote:''}`
-        :`${locationName}｜${userNote}`;
-
-      const l=await sb.from('inventory_logs').insert({
-        item_id:x.id,
-        item_name:x.name,
-        action,
-        quantity:qty,
-        out_type:outType,
-        note:logNote,
-        user_email:userEmail(),
-        operation_date:date
-      });
-
-      if(l.error){
-        alert('库存已更新，但日期记录失败：'+l.error.message+'。请确认已运行 operation-date-upgrade.sql。');
-        return;
-      }
-
-      document.getElementById('stockDialog').close();
-      await loadAll();
     };
 
     saveItem=async function(){
