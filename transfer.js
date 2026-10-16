@@ -22,6 +22,34 @@
   function addDrawerTransferButton(id){const actions=document.querySelector('#itemDrawer .drawer-actions');if(!actions)return;let btn=actions.querySelector('.drawer-transfer-btn');if(!btn){btn=document.createElement('button');btn.className='secondary drawer-transfer-btn';btn.textContent='移库';const edit=document.getElementById('drawerEditBtn');actions.insertBefore(btn,edit||null);}btn.onclick=()=>{if(typeof closeItemDrawer==='function')closeItemDrawer();openTransfer(id);};}
   function openTransfer(id){const x=items.find(i=>i.id===id);if(!x)return;transferItemId=id;document.getElementById('transferTitle').textContent=x.name+' · 移库';const saved=localStorage.getItem('stockOperationDate');document.getElementById('transferDate').value=saved||today();document.getElementById('transferDirection').value='warehouse_to_fridge';document.getElementById('transferQty').value='';refreshHint();document.getElementById('transferDialog').showModal();}
   function refreshHint(){const x=items.find(i=>i.id===transferItemId);if(!x)return;const direction=document.getElementById('transferDirection').value,from=direction==='warehouse_to_fridge'?'仓库':'冰箱',to=direction==='warehouse_to_fridge'?'冰箱':'仓库',sourceQty=direction==='warehouse_to_fridge'?warehouse(x):fridge(x);document.getElementById('transferStockHint').textContent=`${from}当前库存：${sourceQty} ${x.unit||''}。移到${to}后，总库存不变。`;}
-  async function saveTransfer(){const x=items.find(i=>i.id===transferItemId);if(!x)return;const date=document.getElementById('transferDate').value,direction=document.getElementById('transferDirection').value,qty=Number(document.getElementById('transferQty').value);if(!date)return alert('请选择日期');if(!Number.isFinite(qty)||qty<=0)return alert('请输入大于 0 的移库数量');localStorage.setItem('stockOperationDate',date);const fq=fridge(x),wq=warehouse(x);let nextF=fq,nextW=wq,from,to;if(direction==='warehouse_to_fridge'){from='仓库';to='冰箱';if(qty>wq)return alert('仓库库存不足，当前只有 '+wq);nextW=wq-qty;nextF=fq+qty;}else{from='冰箱';to='仓库';if(qty>fq)return alert('冰箱库存不足，当前只有 '+fq);nextF=fq-qty;nextW=wq+qty;}const r=await sb.from('inventory_items').update({fridge_quantity:nextF,warehouse_quantity:nextW,quantity:nextF+nextW,updated_at:new Date().toISOString()}).eq('id',x.id);if(r.error)return alert('移库失败：'+r.error.message);const detail=`${from} → ${to}`;const log=await sb.from('inventory_logs').insert({item_id:x.id,item_name:x.name,action:'TRANSFER',quantity:qty,note:detail,user_email:userEmail(),operation_date:date});if(log.error)alert('移库已完成，但操作记录写入失败：'+log.error.message);document.getElementById('transferDialog').close();await loadAll();}
+  async function saveTransfer(){
+    const x=items.find(i=>i.id===transferItemId);if(!x)return;
+    const date=document.getElementById('transferDate').value;
+    const direction=document.getElementById('transferDirection').value;
+    const qty=Number(document.getElementById('transferQty').value);
+    if(!date)return alert('请选择日期');
+    if(!Number.isFinite(qty)||qty<=0)return alert('请输入大于 0 的移库数量');
+    localStorage.setItem('stockOperationDate',date);
+
+    const btn=document.getElementById('saveTransferBtn');
+    if(btn?.disabled)return;
+    if(btn){btn.disabled=true;btn.textContent='处理中...';}
+    try{
+      const {data,error}=await sb.rpc('apply_inventory_transfer',{
+        p_item:x.id,
+        p_direction:direction,
+        p_quantity:qty,
+        p_operation_date:date
+      });
+      if(error){
+        alert('移库失败：'+error.message+'\n库存和移库记录都没有改变。');
+        return;
+      }
+      document.getElementById('transferDialog').close();
+      await loadAll();
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent='确认移库';}
+    }
+  }
   waitForApp();
 })();
