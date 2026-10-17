@@ -31,6 +31,7 @@
         <option value="NORMAL">正常销售</option>
         <option value="ENT">ENT</option>
         <option value="FOC">FOC</option>
+        <option value="KITCHEN">厨房做酱</option>
         <option value="NO_PAID">NO Paid</option>
         <option value="OTHER">其他</option>
       </select>`;
