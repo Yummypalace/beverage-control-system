@@ -47,6 +47,17 @@
     const after=s.match(/调整后\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
     return {before:before?num(before[1]):null,after:after?num(after[1]):null};
   }
+  function parseCreateTotal(note,fallback){
+    const s=String(note||'');
+    const m=s.match(/冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    return m?num(m[1])+num(m[2]):num(fallback);
+  }
+
+  function forwardCreatedSort(a,b){
+    const ca=String(a.created_at||''),cb=String(b.created_at||'');
+    if(ca!==cb)return ca.localeCompare(cb);
+    return Number(a.id||0)-Number(b.id||0);
+  }
 
   function wait(){
     if(typeof sb==='undefined'||typeof showPage!=='function'||typeof items==='undefined'||!document.querySelector('.side-nav')||!document.querySelector('.content-area')){
@@ -207,21 +218,76 @@
 
   function snapshotAt(cutoff){
     const states=new Map();
-    items.forEach(x=>states.set(String(x.id),{total:num(x.fridge_quantity)+num(x.warehouse_quantity),exists:true,uncertain:false}));
-    allLogs.filter(r=>dateOf(r)>cutoff).sort(reverseLogSort).forEach(r=>{
-      const s=states.get(String(r.item_id||''));if(!s||!s.exists)return;
-      const q=num(r.quantity),action=String(r.action||''),note=String(r.note||'');
-      if(action==='IN'||action==='RETURN')s.total-=q;
-      else if(action==='OUT'||action==='BORROW')s.total+=q;
-      else if(action==='CREATE'){s.total=0;s.exists=false;}
-      else if(action==='EDIT'){
-        const p=parseEdit(note);if(p.before!==null)s.total=p.before;else s.uncertain=true;
-      }else if(action==='ADJUST'){
-        const p=parseAdjust(note);
-        if(p.before!==null&&p.after!==null)s.total-=p.after-p.before;
-        else s.uncertain=true;
-      }
+    const logsByItem=new Map();
+
+    allLogs.forEach(r=>{
+      const key=String(r.item_id||'');
+      if(!logsByItem.has(key))logsByItem.set(key,[]);
+      logsByItem.get(key).push(r);
     });
+
+    items.forEach(item=>{
+      const key=String(item.id);
+      const logs=logsByItem.get(key)||[];
+      const eligible=logs.filter(r=>dateOf(r)<=cutoff);
+
+      const creates=eligible
+        .filter(r=>String(r.action||'')==='CREATE')
+        .sort(forwardCreatedSort);
+
+      if(creates.length){
+        const create=creates[0];
+        const anchor=String(create.created_at||'');
+        const state={
+          total:parseCreateTotal(create.note,create.quantity),
+          exists:true,
+          uncertain:false
+        };
+
+        eligible
+          .filter(r=>r!==create&&String(r.created_at||'')>=anchor)
+          .sort(forwardCreatedSort)
+          .forEach(r=>{
+            const q=num(r.quantity);
+            const action=String(r.action||'');
+            const note=String(r.note||'');
+
+            if(action==='CREATE')return;
+            if(action==='IN'||action==='RETURN')state.total+=q;
+            else if(action==='OUT'||action==='BORROW')state.total-=q;
+            else if(action==='TRANSFER')return;
+            else if(action==='EDIT'){
+              const p=parseEdit(note);
+              if(p.after!==null)state.total=p.after;
+              else state.uncertain=true;
+            }else if(action==='ADJUST'){
+              const p=parseAdjust(note);
+              if(p.before!==null&&p.after!==null)state.total+=p.after-p.before;
+              else state.uncertain=true;
+            }
+          });
+
+        states.set(key,state);
+        return;
+      }
+
+      // 没有可用 CREATE 基准的旧品项才使用当前库存倒推，作为兼容兜底。
+      const state={total:num(item.fridge_quantity)+num(item.warehouse_quantity),exists:true,uncertain:true};
+      logs.filter(r=>dateOf(r)>cutoff).sort(reverseLogSort).forEach(r=>{
+        const q=num(r.quantity),action=String(r.action||''),note=String(r.note||'');
+        if(action==='IN'||action==='RETURN')state.total-=q;
+        else if(action==='OUT'||action==='BORROW')state.total+=q;
+        else if(action==='CREATE'){state.total=0;state.exists=false;}
+        else if(action==='EDIT'){
+          const p=parseEdit(note);if(p.before!==null)state.total=p.before;
+        }else if(action==='ADJUST'){
+          const p=parseAdjust(note);
+          if(p.before!==null&&p.after!==null)state.total-=p.after-p.before;
+        }
+      });
+      states.set(key,state);
+    });
+
     return states;
   }
 
@@ -278,7 +344,9 @@
       const openState=open.get(String(item.id));
       const closeState=close.get(String(item.id));
       const opening=openState&&openState.exists?num(openState.total):0;
-      const closing=closeState&&closeState.exists?num(closeState.total):0;
+      const closing=selectedMonth===currentMonth()
+        ? num(item.fridge_quantity)+num(item.warehouse_quantity)
+        : (closeState&&closeState.exists?num(closeState.total):0);
       const sold=opening+s.inbound-closing;
 
       let posValue=null;
