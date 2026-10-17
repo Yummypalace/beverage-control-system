@@ -231,21 +231,28 @@
       const logs=logsByItem.get(key)||[];
       const eligible=logs.filter(r=>dateOf(r)<=cutoff);
 
-      const creates=eligible
-        .filter(r=>String(r.action||'')==='CREATE')
+      const anchors=eligible
+        .filter(r=>{
+          const action=String(r.action||'');
+          if(action==='CREATE')return true;
+          if(action==='EDIT')return parseEdit(r.note).after!==null;
+          return false;
+        })
         .sort(forwardCreatedSort);
 
-      if(creates.length){
-        const create=creates[0];
-        const anchor=String(create.created_at||'');
+      if(anchors.length){
+        const base=anchors[0];
+        const baseAction=String(base.action||'');
+        const baseEdit=baseAction==='EDIT'?parseEdit(base.note):null;
+        const anchor=String(base.created_at||'');
         const state={
-          total:parseCreateTotal(create.note,create.quantity),
+          total:baseAction==='CREATE'?parseCreateTotal(base.note,base.quantity):num(baseEdit.after),
           exists:true,
           uncertain:false
         };
 
         eligible
-          .filter(r=>r!==create&&String(r.created_at||'')>=anchor)
+          .filter(r=>r!==base&&String(r.created_at||'')>=anchor)
           .sort(forwardCreatedSort)
           .forEach(r=>{
             const q=num(r.quantity);
