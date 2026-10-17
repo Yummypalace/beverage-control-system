@@ -33,7 +33,7 @@
     return true;
   }
 
-  function restorePage(force=false){
+  function restorePage(){
     if(restoring)return;
     const app=document.getElementById('appView');
     if(!app||app.classList.contains('hidden')||typeof showPage!=='function')return;
@@ -47,16 +47,11 @@
     if(!canOpen(page))return;
 
     const current=activePage();
-    if(!force&&current===page)return;
+    if(current===page)return;
 
     restoring=true;
     try{showPage(page);}catch(e){}
-    setTimeout(()=>{
-      restoring=false;
-      if(activePage()!==page){
-        try{showPage(page);}catch(e){}
-      }
-    },180);
+    setTimeout(()=>{restoring=false;},180);
   }
 
   // 用户点侧边栏时立即保存，不依赖各页面自己的 showPage 实现。
@@ -87,23 +82,28 @@
     if(page)savePage(page);
   });
 
+  let returnTimer=null;
+  function scheduleRestore(){
+    clearTimeout(returnTimer);
+    returnTimer=setTimeout(()=>restorePage(),180);
+  }
+
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='hidden'){
       const page=activePage();
       if(page)savePage(page);
       return;
     }
-    // 从 Excel / 其他标签切回来时，再恢复一次。
-    setTimeout(()=>restorePage(true),120);
-    setTimeout(()=>restorePage(true),500);
+    // 切回系统时只检查一次；如果本来就在正确页面，不重绘。
+    scheduleRestore();
   });
 
-  window.addEventListener('focus',()=>setTimeout(()=>restorePage(true),120));
+  window.addEventListener('focus',scheduleRestore);
 
   function boot(){
     startObserver();
     // 动态页面（备注、月结、错单）脚本需要一点时间加载，所以连续尝试恢复。
-    [150,400,800,1400,2200,3500].forEach(ms=>setTimeout(()=>restorePage(false),ms));
+    [180,500,1000,1800].forEach(ms=>setTimeout(()=>restorePage(),ms));
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);
