@@ -467,7 +467,7 @@
 
   function draftFromInputs(){
     const draft={};
-    document.querySelectorAll('#reconInventoryBody input[data-item-id]').forEach(i=>draft[i.dataset.itemId]=i.value);
+    document.querySelectorAll('#reconInventoryBody .recon-pos-input[data-item-id]').forEach(i=>draft[i.dataset.itemId]=i.value);
     return draft;
   }
 
@@ -883,7 +883,6 @@
   function flushPendingPosSaves(){
     posSaveTimers.forEach(timer=>clearTimeout(timer));
     posSaveTimers.clear();
-    pendingPosSaves.clear();
     const pending=[...pendingPosSaves.values()];
     pending.forEach(p=>saveSinglePosValue(p));
   }
