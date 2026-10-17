@@ -196,8 +196,8 @@
   function populateMonths(){
     const select=document.getElementById('reconMonth');if(!select)return;
     const months=new Set([currentMonth()]);
-    allLogs.forEach(r=>{const m=monthOf(r);if(/^\d{4}-\d{2}$/.test(m))months.add(m);});
-    posRows.forEach(r=>{if(/^\d{4}-\d{2}$/.test(r.month_key||''))months.add(r.month_key);});
+    allLogs.forEach(r=>{const m=monthOf(r);if(/^\d{4}-\d{2}$/.test(m)&&m>='2026-09')months.add(m);});
+    posRows.forEach(r=>{if(/^\d{4}-\d{2}$/.test(r.month_key||'')&&r.month_key>='2026-09')months.add(r.month_key);});
     const list=[...months].sort((a,b)=>b.localeCompare(a));
     if(!selectedMonth||!months.has(selectedMonth))selectedMonth=currentMonth();
     select.innerHTML=list.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
