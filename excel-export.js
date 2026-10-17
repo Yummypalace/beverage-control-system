@@ -11,7 +11,7 @@
   function monthEnd(month){const p=String(month).split('-').map(Number);if(p.length!==2||!p[0]||!p[1])return '';return new Date(Date.UTC(p[0],p[1],0)).toISOString().slice(0,10);}
   function reverseLogSort(a,b){const da=dateOf(a),db=dateOf(b);if(da!==db)return db.localeCompare(da);const ca=String(a.created_at||''),cb=String(b.created_at||'');if(ca!==cb)return cb.localeCompare(ca);return Number(b.id||0)-Number(a.id||0);}
   function locationOf(note){const s=String(note||'');if(s.startsWith('冰箱｜'))return 'fridge';if(s.startsWith('仓库｜'))return 'warehouse';return '';}
-  function actionLabel(action){return ({IN:'入库',OUT:'出库',TRANSFER:'移库',ADJUST:'盘点',CREATE:'新增',EDIT:'编辑'})[String(action||'')]||String(action||'');}
+  function actionLabel(action){return ({IN:'入库',OUT:'出库',BORROW:'借出',RETURN:'还回',TRANSFER:'移库',ADJUST:'盘点',CREATE:'新增',EDIT:'编辑'})[String(action||'')]||String(action||'');}
   function parseBusinessNote(r){
     const raw=String(r?.note||'').trim(),action=String(r?.action||'');
     if(!raw)return {location:'',note:''};
@@ -26,7 +26,7 @@
       if(!location&&parts.length&&parts[0].includes('→'))location=parts.shift();
       return {location,note:parts.join('｜').trim()};
     }
-    if(action==='IN'||action==='OUT')return {location,note:parts.join('｜').trim()};
+    if(['IN','OUT','BORROW','RETURN'].includes(action))return {location,note:parts.join('｜').trim()};
     return {location,note:(location?parts.join('｜'):raw).trim()};
   }
   function meaningfulBusinessNote(r){
@@ -83,10 +83,10 @@
           .forEach(r=>{
             const q=Number(r.quantity||0),action=String(r.action||''),loc=locationOf(r.note),note=String(r.note||'');
             if(action==='CREATE')return;
-            if(action==='IN'){
-              if(loc==='fridge')s.fridge+=q;else if(loc==='warehouse')s.warehouse+=q;else addWarning(s,'入库位置无法识别');
-            }else if(action==='OUT'){
-              if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,'出库位置无法识别');
+            if(action==='IN'||action==='RETURN'){
+              if(loc==='fridge')s.fridge+=q;else if(loc==='warehouse')s.warehouse+=q;else addWarning(s,action==='RETURN'?'还回位置无法识别':'入库位置无法识别');
+            }else if(action==='OUT'||action==='BORROW'){
+              if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,action==='BORROW'?'借出位置无法识别':'出库位置无法识别');
             }else if(action==='TRANSFER'){
               if(note.startsWith('仓库 → 冰箱')){s.fridge+=q;s.warehouse-=q;}
               else if(note.startsWith('冰箱 → 仓库')){s.fridge-=q;s.warehouse+=q;}
@@ -110,10 +110,10 @@
     futureLogs.forEach(r=>{
       const s=fallback.get(String(r.item_id||''));if(!s||!s.exists)return;
       const q=Number(r.quantity||0),action=String(r.action||''),loc=locationOf(r.note),note=String(r.note||'');
-      if(action==='IN'){
-        if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,'入库位置无法识别');
-      }else if(action==='OUT'){
-        if(loc==='fridge')s.fridge+=q;else if(loc==='warehouse')s.warehouse+=q;else addWarning(s,'出库位置无法识别');
+      if(action==='IN'||action==='RETURN'){
+        if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,action==='RETURN'?'还回位置无法识别':'入库位置无法识别');
+      }else if(action==='OUT'||action==='BORROW'){
+        if(loc==='fridge')s.fridge+=q;else if(loc==='warehouse')s.warehouse+=q;else addWarning(s,action==='BORROW'?'借出位置无法识别':'出库位置无法识别');
       }else if(action==='TRANSFER'){
         if(note.startsWith('仓库 → 冰箱')){s.fridge-=q;s.warehouse+=q;}
         else if(note.startsWith('冰箱 → 仓库')){s.warehouse-=q;s.fridge+=q;}
