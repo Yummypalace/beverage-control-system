@@ -5,7 +5,7 @@
   let observer=null;
   let canEditOldOutType=false;
 
-  const CATEGORIES=['正常销售','ENT','FOC','厨房使用','NO Paid','其他'];
+  const CATEGORIES=['正常销售','ENT','FOC','厨房使用','NO Paid','取消入库','其他'];
 
   function currentMonth(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'}).slice(0,7);}
   async function checkAdminEditPermission(){
@@ -17,7 +17,7 @@
   }
 
   function outTypeLabel(v){
-    return ({NORMAL:'正常销售',ENT:'ENT',FOC:'FOC',KITCHEN:'厨房使用',NO_PAID:'NO Paid',OTHER:'其他'})[v]||'';
+    return ({NORMAL:'正常销售',ENT:'ENT',FOC:'FOC',KITCHEN:'厨房使用',NO_PAID:'NO Paid',CANCEL_IN:'取消入库',OTHER:'其他'})[v]||'';
   }
 
   async function editOldOutType(tr){
@@ -26,11 +26,11 @@
     const action=(tr.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
     if(!logId||action!=='OUT')return;
     const current=tr.dataset.outType||'NORMAL';
-    const raw=prompt('修改用途分类：\n1 = 正常销售\n2 = ENT\n3 = FOC\n4 = 厨房使用\n5 = NO Paid\n6 = 其他',({NORMAL:'1',ENT:'2',FOC:'3',KITCHEN:'4',NO_PAID:'5',OTHER:'6'})[current]||'1');
+    const raw=prompt('修改用途分类：\n1 = 正常销售\n2 = ENT\n3 = FOC\n4 = 厨房使用\n5 = NO Paid\n6 = 取消入库\n7 = 其他',({NORMAL:'1',ENT:'2',FOC:'3',KITCHEN:'4',NO_PAID:'5',CANCEL_IN:'6',OTHER:'7'})[current]||'1');
     if(raw===null)return;
-    const map={'1':'NORMAL','2':'ENT','3':'FOC','4':'KITCHEN','5':'NO_PAID','6':'OTHER','NORMAL':'NORMAL','ENT':'ENT','FOC':'FOC','厨房使用':'KITCHEN','KITCHEN':'KITCHEN','NO PAID':'NO_PAID','NO_PAID':'NO_PAID','OTHER':'OTHER'};
+    const map={'1':'NORMAL','2':'ENT','3':'FOC','4':'KITCHEN','5':'NO_PAID','6':'CANCEL_IN','7':'OTHER','NORMAL':'NORMAL','ENT':'ENT','FOC':'FOC','厨房使用':'KITCHEN','KITCHEN':'KITCHEN','NO PAID':'NO_PAID','NO_PAID':'NO_PAID','取消入库':'CANCEL_IN','CANCEL_IN':'CANCEL_IN','OTHER':'OTHER'};
     const next=map[String(raw).trim().toUpperCase()];
-    if(!next)return alert('请输入 1-6，或正常销售 / ENT / FOC / 厨房使用 / NO Paid / 其他');
+    if(!next)return alert('请输入 1-7，或正常销售 / ENT / FOC / 厨房使用 / NO Paid / 取消入库 / 其他');
     const {error}=await sb.rpc('set_inventory_log_out_type_admin',{p_log_id:logId,p_out_type:next});
     if(error)return alert('修改失败：'+error.message);
     tr.dataset.outType=next;
@@ -47,6 +47,7 @@
       if(outType==='FOC')return 'FOC';
       if(outType==='KITCHEN')return '厨房使用';
       if(outType==='NO_PAID')return 'NO Paid';
+      if(outType==='CANCEL_IN')return '取消入库';
       if(outType==='OTHER')return '其他';
     }
     const raw=(row.querySelector('.out-note-note-cell')?.textContent||'').trim();
