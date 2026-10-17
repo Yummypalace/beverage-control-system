@@ -284,8 +284,10 @@
       if(draftPos&&Object.prototype.hasOwnProperty.call(draftPos,item.id)){
         const raw=draftPos[item.id];posValue=raw===''?null:num(raw);
       }else{
-        const saved=pmap.get(`${item.id}|${selectedMonth}`);
-        posValue=saved?num(saved.pos_quantity):null;
+        const saved=pmap.get(`${item.id}|${selectedMonth}`)
+          || posRows.find(r=>r.month_key===selectedMonth&&String(r.item_name||'')===String(item.name||''));
+        const monthHasSavedPos=posRows.some(r=>r.month_key===selectedMonth);
+        posValue=saved?num(saved.pos_quantity):(monthHasSavedPos?0:null);
       }
 
       const explained=posValue===null?null:posValue+s.ent+s.foc+s.kitchen+s.noPaid+s.cancelIn+s.other+s.borrow-s.returned;
