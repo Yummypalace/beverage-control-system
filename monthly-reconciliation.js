@@ -60,6 +60,67 @@
     return Number(a.id||0)-Number(b.id||0);
   }
 
+  const RECON_WIDTHS_KEY='monthlyReconColumnWidthsV1';
+
+  function loadReconColumnWidths(){
+    try{return JSON.parse(localStorage.getItem(RECON_WIDTHS_KEY)||'{}')||{};}catch(e){return {};}
+  }
+
+  function saveReconColumnWidths(widths){
+    try{localStorage.setItem(RECON_WIDTHS_KEY,JSON.stringify(widths));}catch(e){}
+  }
+
+  function installReconColumnResize(){
+    const table=document.querySelector('#monthlyReconciliation .recon-table');
+    if(!table)return;
+    const heads=[...table.querySelectorAll('thead th')];
+    const saved=loadReconColumnWidths();
+
+    heads.forEach((th,index)=>{
+      th.style.position='sticky';
+      th.dataset.colIndex=String(index);
+      const savedWidth=Number(saved[index]);
+      if(Number.isFinite(savedWidth)&&savedWidth>=60){
+        th.style.width=savedWidth+'px';
+        th.style.minWidth=savedWidth+'px';
+        th.style.maxWidth=savedWidth+'px';
+      }
+
+      if(th.querySelector('.recon-col-resizer'))return;
+      const handle=document.createElement('span');
+      handle.className='recon-col-resizer';
+      handle.title='拖动调整列宽';
+      th.appendChild(handle);
+
+      handle.addEventListener('mousedown',e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const startX=e.clientX;
+        const startWidth=th.getBoundingClientRect().width;
+        document.body.classList.add('recon-resizing');
+
+        const move=ev=>{
+          const width=Math.max(60,Math.round(startWidth+ev.clientX-startX));
+          th.style.width=width+'px';
+          th.style.minWidth=width+'px';
+          th.style.maxWidth=width+'px';
+        };
+
+        const up=()=>{
+          document.removeEventListener('mousemove',move);
+          document.removeEventListener('mouseup',up);
+          document.body.classList.remove('recon-resizing');
+          const widths=loadReconColumnWidths();
+          widths[index]=Math.round(th.getBoundingClientRect().width);
+          saveReconColumnWidths(widths);
+        };
+
+        document.addEventListener('mousemove',move);
+        document.addEventListener('mouseup',up);
+      });
+    });
+  }
+
   function wait(){
     if(typeof sb==='undefined'||typeof showPage!=='function'||typeof items==='undefined'||!document.querySelector('.side-nav')||!document.querySelector('.content-area')){
       setTimeout(wait,150);return;
@@ -72,6 +133,7 @@
     buildPage();
     extendNavigation();
     addStyle();
+    installReconColumnResize();
     selectedMonth=currentMonth();
     loadData();
   }
@@ -538,7 +600,7 @@
 .recon-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px;background:#f8fafc}.recon-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px;min-width:190px}.recon-controls select{min-height:42px}.recon-control-actions{display:flex;gap:8px}.recon-control-actions button{min-height:42px}
 .recon-summary{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:12px}.recon-summary .card{padding:13px 14px}.recon-summary small{display:block;color:#667085}.recon-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
 .recon-guide{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#f7f9fc;color:#475467;font-size:13px;line-height:1.6}.recon-guide b{color:#173b5e;white-space:nowrap}
-.recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-table-head{position:relative;min-height:28px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}.recon-table-wrap{max-height:64vh;overflow:auto}.recon-table{min-width:1780px}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-pos-input{width:92px;min-height:36px;padding:7px 8px}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
+.recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-table{table-layout:auto}.recon-table thead th{position:sticky}.recon-col-resizer{position:absolute;right:-4px;top:0;width:8px;height:100%;cursor:col-resize;z-index:8;user-select:none}.recon-col-resizer:hover{background:rgba(23,59,94,.12)}body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.recon-resizing *{cursor:col-resize!important}.recon-table-head{position:relative;min-height:28px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}.recon-table-wrap{max-height:64vh;overflow:auto}.recon-table{min-width:1780px}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-pos-input{width:92px;min-height:36px;padding:7px 8px}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
 @media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-actions{justify-content:flex-end}}
 @media(max-width:620px){.recon-summary{grid-template-columns:1fr 1fr}.recon-control-actions{display:grid;grid-template-columns:1fr 1fr}.recon-control-actions button{width:100%}.recon-guide{display:block}.recon-guide b{display:block;margin-bottom:4px}}
 `;document.head.appendChild(s);
