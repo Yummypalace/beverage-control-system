@@ -33,6 +33,7 @@
         <option value="FOC">FOC</option>
         <option value="KITCHEN">厨房使用</option>
         <option value="NO_PAID">NO Paid</option>
+        <option value="CANCEL_IN">取消入库</option>
         <option value="OTHER">其他</option>
       </select>`;
     const seller=document.getElementById('sellerWrap');
