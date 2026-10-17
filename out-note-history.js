@@ -8,7 +8,7 @@
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function dateOf(r){return r.operation_date||new Date(r.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
   function actionLabel(action){
-    return ({IN:'入库',OUT:'出库',ADJUST:'盘点',TRANSFER:'移库',CREATE:'新增',EDIT:'编辑'})[String(action||'')]||String(action||'');
+    return ({IN:'入库',OUT:'出库',BORROW:'借出',RETURN:'还回',ADJUST:'盘点',TRANSFER:'移库',CREATE:'新增',EDIT:'编辑'})[String(action||'')]||String(action||'');
   }
 
   function parseNote(r){
@@ -39,7 +39,7 @@
       return {location,note:parts.join('｜').trim()};
     }
 
-    if(action==='IN'||action==='OUT'){
+    if(['IN','OUT','BORROW','RETURN'].includes(action)){
       return {location,note:parts.join('｜').trim()};
     }
 
@@ -78,7 +78,7 @@
       <div class="out-note-head"><div><h2>出入库备注</h2><div class="hint">入库、出库、盘点或移库时，只要填写备注都会自动汇总到这里。</div></div><span id="outNoteCount"></span></div>
       <div id="outNoteFilters" class="card">
         <label>饮料<select id="outNoteItemFilter"><option value="">全部饮料</option></select></label>
-        <label>操作<select id="outNoteActionFilter"><option value="">全部操作</option><option value="IN">入库</option><option value="OUT">出库</option><option value="ADJUST">盘点</option><option value="TRANSFER">移库</option></select></label>
+        <label>操作<select id="outNoteActionFilter"><option value="">全部操作</option><option value="IN">入库</option><option value="OUT">出库</option><option value="BORROW">借出</option><option value="RETURN">还回</option><option value="ADJUST">盘点</option><option value="TRANSFER">移库</option></select></label>
         <label>开始日期<input id="outNoteDateFrom" type="date"></label>
         <label>结束日期<input id="outNoteDateTo" type="date"></label>
         <label>备注关键词<input id="outNoteKeyword" placeholder="例如：FOC / 厨房 / 供应商"></label>
