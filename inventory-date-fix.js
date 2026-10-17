@@ -72,7 +72,7 @@
       const outType=action==='OUT'?(document.getElementById('stockOutType')?.value||'NORMAL'):null;
       const qty=Number(document.getElementById('stockQty').value);
       if(!Number.isFinite(qty)||qty<0)return alert('请输入正确数量');
-      if((action==='IN'||action==='OUT')&&qty<=0)return alert('数量必须大于 0');
+      if(['IN','OUT','BORROW','RETURN'].includes(action)&&qty<=0)return alert('数量必须大于 0');
 
       const btn=document.getElementById('saveStockBtn');
       if(btn?.disabled)return;
