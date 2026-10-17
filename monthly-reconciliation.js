@@ -163,6 +163,7 @@
         </div>
         <div class="recon-control-actions">
           <button id="reconReload" class="secondary">重新计算</button>
+          <button id="reconExportExcel" class="secondary">导出 Excel</button>
           <button id="reconClearPos" class="secondary">清除 POS 销量</button>
           <button id="reconSavePos">保存 POS 销量</button>
         </div>
@@ -219,6 +220,7 @@
     };
     document.getElementById('reconSearch').oninput=()=>render(true);
     document.getElementById('reconReload').onclick=()=>loadData(true);
+    document.getElementById('reconExportExcel').onclick=exportMonthlyReconExcel;
     document.getElementById('reconClearPos').onclick=clearPos;
     document.getElementById('reconSavePos').onclick=savePos;
     document.querySelectorAll('#monthlyReconciliation .recon-sort-btn').forEach(btn=>{
@@ -596,6 +598,116 @@
     document.getElementById('reconPosTotal').textContent=pos;
     document.getElementById('reconSpecialTotal').textContent=special;
     document.getElementById('reconIssueTotal').textContent=issue;
+  }
+
+  function ensureSheetJS(){
+    if(window.XLSX)return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      let s=document.getElementById('sheetJsLib');
+      if(!s){
+        s=document.createElement('script');
+        s.id='sheetJsLib';
+        s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+        document.head.appendChild(s);
+      }
+      if(window.XLSX){resolve();return;}
+      s.addEventListener('load',()=>resolve(),{once:true});
+      s.addEventListener('error',()=>reject(new Error('Excel 模块加载失败')),{once:true});
+    });
+  }
+
+  function excelStatus(r){
+    if(r.uncertain)return '需核对旧记录';
+    if(r.diff===null)return '待填 POS';
+    return Math.abs(num(r.diff))<0.000001?'OK':'CHECK';
+  }
+
+  async function exportMonthlyReconExcel(){
+    const btn=document.getElementById('reconExportExcel');
+    if(!btn)return;
+    const old=btn.textContent;
+    btn.disabled=true;btn.textContent='导出中...';
+    try{
+      await ensureSheetJS();
+      const draft=draftFromInputs();
+      const rows=computeRows(draft);
+      const isCurrent=selectedMonth===currentMonth();
+
+      const data=rows.map(r=>isCurrent?{
+        '名称':r.item.name||'',
+        '类别':r.item.category||'',
+        '上月结存':clean(r.opening),
+        '本月结存':'',
+        '本月入库':'',
+        '本月实际减少':'',
+        'POS 销量':'',
+        'ENT':'',
+        'FOC':'',
+        '厨房使用':'',
+        'NO Paid':'',
+        '取消入库':'',
+        '借出':'',
+        '还回':'',
+        '其他':'',
+        '对账差异':'',
+        '状态':'本月尚未结束'
+      }:{
+        '名称':r.item.name||'',
+        '类别':r.item.category||'',
+        '上月结存':clean(r.opening),
+        '本月结存':clean(r.closing),
+        '本月入库':clean(r.inbound),
+        '本月实际减少':clean(r.sold),
+        'POS 销量':r.posValue===null?'':clean(r.posValue),
+        'ENT':clean(r.ent),
+        'FOC':clean(r.foc),
+        '厨房使用':clean(r.kitchen),
+        'NO Paid':clean(r.noPaid),
+        '取消入库':clean(r.cancelIn),
+        '借出':clean(r.borrow),
+        '还回':clean(r.returned),
+        '其他':clean(r.other),
+        '对账差异':r.uncertain?'需核对旧记录':(r.diff===null?'':clean(r.diff)),
+        '状态':excelStatus(r)
+      });
+
+      const wb=XLSX.utils.book_new();
+      const ws=XLSX.utils.json_to_sheet(data.length?data:[{'暂无数据':''}]);
+      if(ws['!ref']){
+        ws['!autofilter']={ref:ws['!ref']};
+        const range=XLSX.utils.decode_range(ws['!ref']);
+        const widths=[];
+        for(let col=range.s.c;col<=range.e.c;col++){
+          let max=10;
+          for(let row=range.s.r;row<=range.e.r;row++){
+            const cell=ws[XLSX.utils.encode_cell({r:row,c:col})];
+            if(cell&&cell.v!=null)max=Math.max(max,String(cell.v).length+2);
+          }
+          widths.push({wch:Math.min(max,22)});
+        }
+        ws['!cols']=widths;
+      }
+      XLSX.utils.book_append_sheet(wb,ws,'月结核对');
+
+      const summaryRows=isCurrent
+        ?[{'月份':monthLabel(selectedMonth),'说明':'本月尚未结束，仅显示上月结存'}]
+        :[{
+          '月份':monthLabel(selectedMonth),
+          '本月实际减少':clean(rows.reduce((s,r)=>s+r.sold,0)),
+          'POS 销量':clean(rows.reduce((s,r)=>s+(r.posValue===null?0:r.posValue),0)),
+          '特殊用途 / 借出净额':clean(rows.reduce((s,r)=>s+r.ent+r.foc+r.kitchen+r.noPaid+r.cancelIn+r.other+r.borrow-r.returned,0)),
+          '待查差异':clean(rows.reduce((s,r)=>s+(r.uncertain||r.diff===null?0:Math.abs(num(r.diff))),0))
+        }];
+      const sws=XLSX.utils.json_to_sheet(summaryRows);
+      sws['!cols']=[{wch:14},{wch:16},{wch:14},{wch:24},{wch:14}];
+      XLSX.utils.book_append_sheet(wb,sws,'汇总');
+
+      XLSX.writeFile(wb,`月结核对_${selectedMonth}.xlsx`);
+    }catch(e){
+      alert('导出失败：'+String(e?.message||e));
+    }finally{
+      btn.disabled=false;btn.textContent=old||'导出 Excel';
+    }
   }
 
   async function clearPos(){
