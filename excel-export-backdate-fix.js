@@ -28,8 +28,8 @@
         if(create&&String(r.created_at||'')<anchor)return;
         if(r===create)return;
         const q=Number(r.quantity||0),a=String(r.action||''),l=loc(r.note),n=String(r.note||'');
-        if(a==='IN'){if(l==='fridge')f+=q;else if(l==='warehouse')w+=q;}
-        else if(a==='OUT'){if(l==='fridge')f-=q;else if(l==='warehouse')w-=q;}
+        if(a==='IN'||a==='RETURN'){if(l==='fridge')f+=q;else if(l==='warehouse')w+=q;}
+        else if(a==='OUT'||a==='BORROW'){if(l==='fridge')f-=q;else if(l==='warehouse')w-=q;}
         else if(a==='TRANSFER'){if(n.startsWith('仓库 → 冰箱')){f+=q;w-=q;}else if(n.startsWith('冰箱 → 仓库')){f-=q;w+=q;}}
         else if(a==='EDIT'){const p=parsePair(n,'after')||(/编辑资料（冰箱/.test(n)?parsePair(n,'create'):null);if(p){f=p.fridge;w=p.warehouse;started=true;}}
         else if(a==='ADJUST'){if(l==='fridge')f=q;else if(l==='warehouse')w=q;started=true;}
@@ -57,7 +57,7 @@
       ]);
       if(lr.error)throw lr.error;if(cr.error)throw cr.error;
       const inv=build(lr.data||[],cutoff);
-      const logs=(lr.data||[]).filter(r=>mode==='day'?dateOf(r)===value:dateOf(r).startsWith(value+'-')).map(r=>({'日期':dateOf(r),'饮料':r.item_name||'','操作':({IN:'入库',OUT:'出库',TRANSFER:'移库',ADJUST:'盘点',CREATE:'新增',EDIT:'编辑'})[r.action]||r.action,'数量':Number(r.quantity||0),'备注':r.note||'','操作账号':r.user_email||''}));
+      const logs=(lr.data||[]).filter(r=>mode==='day'?dateOf(r)===value:dateOf(r).startsWith(value+'-')).map(r=>({'日期':dateOf(r),'饮料':r.item_name||'','操作':({IN:'入库',OUT:'出库',BORROW:'借出',RETURN:'还回',TRANSFER:'移库',ADJUST:'盘点',CREATE:'新增',EDIT:'编辑'})[r.action]||r.action,'数量':Number(r.quantity||0),'备注':r.note||'','操作账号':r.user_email||''}));
       const com=(cr.data||[]).filter(r=>mode==='day'?dateOf(r)===value:dateOf(r).startsWith(value+'-')).map(r=>({'日期':dateOf(r),'员工':r.seller_name||'','饮料':r.item_name||'','销售数量':Number(r.quantity||0),'单位提成 SGD':Number(r.commission_per_unit||0),'提成金额 SGD':Number(r.commission_amount||0),'备注':r.note||'','录入账号':r.user_email||''}));
       const wb=XLSX.utils.book_new();addSheet(wb,'库存快照',inv);addSheet(wb,'库存记录',logs);addSheet(wb,'销售提成',com);
       XLSX.writeFile(wb,'饮料库存数据_'+value+'.xlsx');
