@@ -1,7 +1,7 @@
 const cfg=window.APP_CONFIG;
 const sb=supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY);
 const accountClient=supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-let items=[],logs=[],commissions=[],categories=[],editingId=null,stockItemId=null,drawerItemId=null,realtimeChannel=null;
+let items=[],logs=[],commissions=[],categories=[],editingId=null,stockItemId=null,drawerItemId=null,realtimeChannel=null,appSessionReady=false;
 const $=id=>document.getElementById(id);
 function esc(v=""){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function fmt(v){return new Date(v).toLocaleString("zh-SG",{timeZone:"Asia/Singapore",hour12:false})}
@@ -14,8 +14,21 @@ function total(x){return fridge(x)+warehouse(x)}
 function showPage(page){const ids=["dashboard","inventory","commission","logs","settings"];ids.forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=id===page?"block":"none"});document.querySelectorAll(".side-nav a").forEach(a=>a.classList.toggle("active",a.getAttribute("href")==="#"+page));window.scrollTo({top:0,behavior:"smooth"})}
 function initSidebarNavigation(){document.querySelectorAll(".side-nav a").forEach(a=>{a.onclick=e=>{e.preventDefault();showPage(a.getAttribute("href").slice(1))}});showPage("dashboard")}
 async function start(){if(!cfg||!cfg.SUPABASE_URL||cfg.SUPABASE_URL.includes("PASTE_")){ $("loginMsg").textContent="Supabase 设置未完成。";return }const{data:{session}}=await sb.auth.getSession();session?await showApp(session.user):showLogin();sb.auth.onAuthStateChange(async(_,s)=>s?await showApp(s.user):showLogin())}
-function showLogin(){$("loginView").classList.remove("hidden");$("appView").classList.add("hidden");$("logoutBtn").classList.add("hidden");$("userEmail").textContent=""}
-async function showApp(user){$("loginView").classList.add("hidden");$("appView").classList.remove("hidden");$("logoutBtn").classList.remove("hidden");$("userEmail").textContent=user.email||"";ensureManagementUI();initSidebarNavigation();await loadAll();subscribeRealtime()}
+function showLogin(){appSessionReady=false;$("loginView").classList.remove("hidden");$("appView").classList.add("hidden");$("logoutBtn").classList.add("hidden");$("userEmail").textContent=""}
+async function showApp(user){
+  const email=user.email||"";
+  const alreadyOpen=appSessionReady&&!$("appView").classList.contains("hidden")&&$("userEmail").textContent===email;
+  if(alreadyOpen)return;
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  $("logoutBtn").classList.remove("hidden");
+  $("userEmail").textContent=email;
+  ensureManagementUI();
+  initSidebarNavigation();
+  appSessionReady=true;
+  await loadAll();
+  subscribeRealtime();
+}
 async function login(){$("loginMsg").textContent="登录中...";const{error}=await sb.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});$("loginMsg").textContent=error?error.message:""}
 async function logout(){await sb.auth.signOut()}
 async function fetchAllCommissionLogs(){const all=[];let from=0;const size=1000;while(true){const{data,error}=await sb.from("commission_logs").select("*").order("operation_date",{ascending:false}).order("created_at",{ascending:false}).range(from,from+size-1);if(error)return{data:[],error};const page=data||[];all.push(...page);if(page.length<size)break;from+=size;}return{data:all,error:null}}
