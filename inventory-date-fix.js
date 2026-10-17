@@ -29,11 +29,9 @@
     label.innerHTML=`出库类型
       <select id="stockOutType">
         <option value="NORMAL">正常销售</option>
-        <option value="CREDIT">签单</option>
-        <option value="FOC">FOC</option>
-        <option value="KITCHEN">厨房使用</option>
-        <option value="STAFF">员工使用</option>
-        <option value="ENT">招待 / ENT</option>
+        <option value="ENT">ENT｜已结清 / 无需再付款</option>
+        <option value="FOC">FOC｜食材使用 / 无 BCRS / 老板给员工喝</option>
+        <option value="NO_PAID">NO Paid｜当天未结账，之后会结账</option>
         <option value="OTHER">其他</option>
       </select>`;
     const seller=document.getElementById('sellerWrap');
