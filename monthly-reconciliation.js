@@ -147,7 +147,7 @@
       selectedMonth=document.getElementById('reconMonth').value||currentMonth();
       render();
     };
-    document.getElementById('reconReload').onclick=()=>loadData(true);
+    document.getElementById('reconReload').onclick=()=>recalculateFresh();
     document.getElementById('reconSavePos').onclick=savePos;
   }
 
@@ -184,6 +184,31 @@
       const page=data||[];all.push(...page);if(page.length<size)break;from+=size;
     }
     return all;
+  }
+
+  async function recalculateFresh(){
+    if(loading)return;
+    loading=true;
+    const status=document.getElementById('reconStatus');
+    const body=document.getElementById('reconInventoryBody');
+    if(body)body.innerHTML='<tr><td colspan="16">重新计算中...</td></tr>';
+    if(status)status.textContent='重新计算中...';
+    try{
+      const [logs,pos]=await Promise.all([
+        fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
+        fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true}))
+      ]);
+      allLogs=logs;
+      posRows=pos;
+      populateMonths();
+      const blankDraft={};
+      items.forEach(item=>blankDraft[item.id]='');
+      render(false,blankDraft);
+      if(status)status.textContent='已重新计算';
+    }catch(e){
+      if(body)body.innerHTML=`<tr><td colspan="16">重新计算失败：${h(e.message||e)}</td></tr>`;
+      if(status)status.textContent='重新计算失败';
+    }finally{loading=false;}
   }
 
   async function loadData(preservePos=false){
