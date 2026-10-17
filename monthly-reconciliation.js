@@ -147,7 +147,7 @@
       selectedMonth=document.getElementById('reconMonth').value||currentMonth();
       render();
     };
-    document.getElementById('reconReload').onclick=loadData;
+    document.getElementById('reconReload').onclick=()=>loadData(true);
     document.getElementById('reconSavePos').onclick=savePos;
   }
 
@@ -186,8 +186,10 @@
     return all;
   }
 
-  async function loadData(){
-    if(loading)return;loading=true;
+  async function loadData(preservePos=false){
+    if(loading)return;
+    const draft=preservePos?draftFromInputs():null;
+    loading=true;
     const status=document.getElementById('reconStatus');
     const body=document.getElementById('reconInventoryBody');
     if(body)body.innerHTML='<tr><td colspan="16">读取中...</td></tr>';
@@ -197,7 +199,7 @@
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true}))
       ]);
-      allLogs=logs;posRows=pos;populateMonths();render();
+      allLogs=logs;posRows=pos;populateMonths();render(false,draft);
       if(status)status.textContent='已更新';
     }catch(e){
       if(body)body.innerHTML=`<tr><td colspan="16">读取失败：${h(e.message||e)}</td></tr>`;
@@ -387,9 +389,9 @@
     return Math.abs(num(r.diff))<0.000001?'<span class="recon-ok">OK</span>':'<span class="recon-bad">CHECK</span>';
   }
 
-  function render(preserveInputs=false){
+  function render(preserveInputs=false,forcedDraft=null){
     const body=document.getElementById('reconInventoryBody');if(!body)return;
-    const draft=preserveInputs?draftFromInputs():null;
+    const draft=forcedDraft||(preserveInputs?draftFromInputs():null);
     const rows=computeRows(draft);
 
     body.innerHTML=rows.map(r=>{
