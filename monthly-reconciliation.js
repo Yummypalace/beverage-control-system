@@ -202,8 +202,8 @@
               <th>本月入库</th>
               <th>本月实际减少</th>
               <th>POS 销量</th>
-              <th class="recon-ent-head" title="员工出库时标注的 ENT 记录；已包含在 POS 销量内，不参与库存对账">ENT（系统）</th>
-              <th class="recon-ent-head" title="月底确认后的真实 ENT 数量；只用于核对员工分类，不影响库存">ENT（实际）</th>
+              <th class="recon-ent-head" title="员工出库时标注的 ENT 记录；已包含在 POS 销量内，不参与库存对账">ENT</th>
+              <th class="recon-ent-head" title="月底确认后的真实 ENT 数量；只用于核对员工分类，不影响库存">ENT (实际)</th>
               <th class="recon-ent-head" title="ENT 实际 − ENT 系统；只用于检查漏标或错标，不影响库存">ENT 差异</th>
               <th>FOC</th>
               <th>厨房使用</th>
@@ -712,8 +712,8 @@
         '本月入库':'',
         '本月实际减少':'',
         'POS 销量':'',
-        'ENT（系统）':'',
-        'ENT（实际）':'',
+        'ENT':'',
+        'ENT (实际)':'',
         'ENT 差异':'',
         'FOC':'',
         '厨房使用':'',
@@ -732,8 +732,8 @@
         '本月入库':clean(r.inbound),
         '本月实际减少':clean(r.sold),
         'POS 销量':r.posValue===null?'':clean(r.posValue),
-        'ENT（系统）':clean(r.ent),
-        'ENT（实际）':r.entActualValue===null?'':clean(r.entActualValue),
+        'ENT':clean(r.ent),
+        'ENT (实际)':r.entActualValue===null?'':clean(r.entActualValue),
         'ENT 差异':r.entDiff===null?'':clean(r.entDiff),
         'FOC':clean(r.foc),
         '厨房使用':clean(r.kitchen),
