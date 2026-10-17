@@ -387,7 +387,16 @@
         return;
       }
 
-      // 没有可用 CREATE 基准的旧品项才使用当前库存倒推，作为兼容兜底。
+      // 如果产品是在截点之后才建立，则截点当时本来就不存在，不属于“需核对旧记录”。
+      const futureCreate=logs
+        .filter(r=>String(r.action||'')==='CREATE'&&dateOf(r)>cutoff)
+        .sort((a,b)=>dateOf(a).localeCompare(dateOf(b))||forwardCreatedSort(a,b))[0];
+      if(futureCreate){
+        states.set(key,{total:0,exists:false,uncertain:false});
+        return;
+      }
+
+      // 没有可用 CREATE / EDIT 基准的真正旧品项，才使用当前库存倒推作为兼容兜底。
       const state={total:num(item.fridge_quantity)+num(item.warehouse_quantity),exists:true,uncertain:true};
       logs.filter(r=>dateOf(r)>cutoff).sort(reverseLogSort).forEach(r=>{
         const q=num(r.quantity),action=String(r.action||''),note=String(r.note||'');
