@@ -515,7 +515,8 @@
     if(v===null||v===undefined)return '<span class="recon-muted">待录入 POS</span>';
     const n=clean(v);
     if(Math.abs(n)<0.000001)return '<span class="recon-ok">0</span>';
-    return n>0?`<span class="recon-bad">少解释 ${n}</span>`:`<span class="recon-warn">多解释 ${Math.abs(n)}</span>`;
+    const signed=n>0?'+'+n:String(n);
+    return `<span class="${n>0?'recon-bad':'recon-warn'}">${signed}</span>`;
   }
 
   function statusText(r){
