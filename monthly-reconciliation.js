@@ -95,6 +95,7 @@
         <label>月份<select id="reconMonth"></select></label>
         <div class="recon-control-actions">
           <button id="reconReload" class="secondary">重新计算</button>
+          <button id="reconClearPos" class="secondary">清除 POS 销量</button>
           <button id="reconSavePos">保存 POS 销量</button>
         </div>
       </div>
@@ -148,6 +149,7 @@
       render();
     };
     document.getElementById('reconReload').onclick=()=>recalculateFresh();
+    document.getElementById('reconClearPos').onclick=clearPos;
     document.getElementById('reconSavePos').onclick=savePos;
   }
 
@@ -462,6 +464,25 @@
     document.getElementById('reconPosTotal').textContent=pos;
     document.getElementById('reconSpecialTotal').textContent=special;
     document.getElementById('reconIssueTotal').textContent=issue;
+  }
+
+  async function clearPos(){
+    const btn=document.getElementById('reconClearPos');if(!btn)return;
+    if(!confirm(monthLabel(selectedMonth)+' 的 POS 销量会全部清空并显示未录入。确定继续吗？'))return;
+    btn.disabled=true;btn.textContent='清除中...';
+    try{
+      const {error}=await sb.from('monthly_pos_sales').delete().eq('month_key',selectedMonth);
+      if(error)throw error;
+      posRows=posRows.filter(r=>r.month_key!==selectedMonth);
+      const blankDraft={};
+      items.forEach(item=>blankDraft[item.id]='');
+      render(false,blankDraft);
+      alert(monthLabel(selectedMonth)+' POS 销量已清除。库存没有改变。');
+    }catch(e){
+      alert('清除失败：'+(e.message||e));
+    }finally{
+      btn.disabled=false;btn.textContent='清除 POS 销量';
+    }
   }
 
   async function savePos(){
