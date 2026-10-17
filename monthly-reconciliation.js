@@ -507,8 +507,8 @@
 
       const entSaved=entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_id)===String(item.id))
         || entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_name||'')===String(item.name||''));
-      const entActualValue=entSaved?num(entSaved.ent_actual):null;
-      const entDiff=entActualValue===null?null:clean(entActualValue-s.ent);
+      const entActualValue=entSaved?num(entSaved.ent_actual):0;
+      const entDiff=clean(entActualValue-s.ent);
 
       const explained=posValue===null?null:posValue+s.foc+s.kitchen+s.noPaid+s.cancelIn+s.other+s.borrow-s.returned;
       const diff=explained===null?null:explained-sold;
@@ -584,8 +584,8 @@
         <td><b>${clean(r.sold)}</b></td>
         <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入"></td>
         <td class="recon-ent-col">${clean(r.ent)}</td>
-        <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(r.entActualValue===null?'':clean(r.entActualValue))}" placeholder="未录入"></td>
-        <td class="recon-ent-col recon-ent-diff" data-ent-diff-for="${h(r.item.id)}">${r.entDiff===null?'<span class="recon-muted">—</span>':(Math.abs(r.entDiff)<0.000001?'<span class="recon-ok">0</span>':`<span class="${r.entDiff>0?'recon-bad':'recon-warn'}">${r.entDiff>0?'+':''}${r.entDiff}</span>`)}</td>
+        <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(clean(r.entActualValue))}"></td>
+        <td class="recon-ent-col recon-ent-diff" data-ent-diff-for="${h(r.item.id)}">${Math.abs(r.entDiff)<0.000001?'<span class="recon-ok">0</span>':`<span class="${r.entDiff>0?'recon-bad':'recon-warn'}">${r.entDiff>0?'+':''}${r.entDiff}</span>`}</td>
         <td>${clean(r.foc)}</td>
         <td>${clean(r.kitchen)}</td>
         <td>${clean(r.noPaid)}</td>
@@ -733,8 +733,8 @@
         '本月实际减少':clean(r.sold),
         'POS 销量':r.posValue===null?'':clean(r.posValue),
         'ENT':clean(r.ent),
-        'ENT (实际)':r.entActualValue===null?'':clean(r.entActualValue),
-        'ENT 差异':r.entDiff===null?'':clean(r.entDiff),
+        'ENT (实际)':clean(r.entActualValue),
+        'ENT 差异':clean(r.entDiff),
         'FOC':clean(r.foc),
         '厨房使用':clean(r.kitchen),
         'NO Paid':clean(r.noPaid),
