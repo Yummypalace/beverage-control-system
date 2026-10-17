@@ -367,8 +367,8 @@
     for(const input of inputs){
       const item=byId.get(String(input.dataset.itemId));if(!item)continue;
       const raw=input.value.trim();
-      if(raw===''){if(existing.has(String(item.id)))deletes.push(item.id);continue;}
-      const q=Number(raw);if(!Number.isFinite(q)||q<0)return alert(`${item.name} 的 POS 数量不正确`);
+      const q=raw===''?0:Number(raw);
+      if(!Number.isFinite(q)||q<0)return alert(`${item.name} 的 POS 数量不正确`);
       upserts.push({month_key:selectedMonth,item_id:item.id,item_name:item.name,pos_quantity:q,updated_by:typeof userEmail==='function'?userEmail():'',updated_at:new Date().toISOString()});
     }
 
