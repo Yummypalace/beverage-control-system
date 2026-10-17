@@ -545,7 +545,8 @@
   function render(preserveInputs=false,forcedDraft=null){
     const body=document.getElementById('reconInventoryBody');if(!body)return;
     const draft=forcedDraft||(preserveInputs?draftFromInputs():null);
-    let rows=computeRows(draft);
+    const allRows=computeRows(draft);
+    let rows=allRows;
     const keyword=(document.getElementById('reconSearch')?.value||'').trim().toLowerCase();
     if(keyword){
       rows=rows.filter(r=>[r.item.name,r.item.category,r.item.spec,r.item.unit].join(' ').toLowerCase().includes(keyword));
@@ -622,7 +623,8 @@
     const monthTitle=document.getElementById('reconMonthTitle');
     if(monthTitle)monthTitle.textContent=monthLabel(selectedMonth);
 
-    updateSummary(rows);
+    // 顶部汇总始终显示所选月份的全部产品总数，不受搜索或排序影响。
+    updateSummary(allRows);
   }
 
   function updateSummary(rows){
