@@ -120,7 +120,7 @@
     showPage=function(page){
       const own=document.getElementById('outNotes');
       if(page==='outNotes'){
-        ['dashboard','inventory','commission','logs','settings','corrections'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+        ['dashboard','inventory','commission','logs','settings','corrections','monthlyReconciliation'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
         if(own)own.style.display='block';
         document.querySelectorAll('.side-nav a').forEach(link=>link.classList.toggle('active',link.getAttribute('href')==='#outNotes'));
         window.scrollTo({top:0,behavior:'smooth'});
