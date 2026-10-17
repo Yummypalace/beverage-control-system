@@ -181,7 +181,7 @@
 
       <div class="card recon-guide">
         <b>核对公式：</b>
-        <span>上月结存 + 本月入库 − 本月结存 = 本月实际减少；本月实际减少应等于 POS 销量 + ENT + FOC + 厨房使用 + NO Paid + 取消入库 + 其他 + 借出 − 还回。</span>
+        <span>上月结存 + 本月入库 − 本月结存 = 本月实际减少；本月实际减少 = POS 销量 + ENT + FOC + 厨房使用 + NO Paid + 取消入库 + 其他 + 借出 − 还回。</span>
       </div>
 
       <div class="card recon-card">
