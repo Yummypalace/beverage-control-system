@@ -149,7 +149,7 @@
       selectedMonth=document.getElementById('reconMonth').value||currentMonth();
       render();
     };
-    document.getElementById('reconReload').onclick=()=>recalculateFresh();
+    document.getElementById('reconReload').onclick=()=>loadData(true);
     document.getElementById('reconClearPos').onclick=clearPos;
     document.getElementById('reconSavePos').onclick=savePos;
   }
