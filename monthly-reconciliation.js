@@ -497,7 +497,7 @@
       }
 
       const explained=posValue===null?null:posValue+s.ent+s.foc+s.kitchen+s.noPaid+s.cancelIn+s.other+s.borrow-s.returned;
-      const diff=explained===null?null:sold-explained;
+      const diff=explained===null?null:explained-sold;
       const uncertain=!!(openState?.uncertain||closeState?.uncertain);
       return {item,...s,opening,closing,sold,posValue,explained,diff,uncertain};
     });
