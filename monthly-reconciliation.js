@@ -421,6 +421,26 @@
     const body=document.getElementById('reconInventoryBody');if(!body)return;
     const draft=forcedDraft||(preserveInputs?draftFromInputs():null);
     const rows=computeRows(draft);
+    const isCurrent=selectedMonth===currentMonth();
+
+    if(isCurrent){
+      body.innerHTML=rows.map(r=>`<tr>
+        <td><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
+        <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+        <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+        <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+      </tr>`).join('')||'<tr><td colspan="16">暂无饮料资料</td></tr>';
+
+      const hint=document.getElementById('reconInventoryDateHint');
+      if(hint)hint.textContent='本月尚未结束，月结数据暂不显示';
+      const monthTitle=document.getElementById('reconMonthTitle');
+      if(monthTitle)monthTitle.textContent=monthLabel(selectedMonth);
+
+      ['reconSoldTotal','reconPosTotal','reconSpecialTotal','reconIssueTotal'].forEach(id=>{
+        const el=document.getElementById(id);if(el)el.textContent='-';
+      });
+      return;
+    }
 
     body.innerHTML=rows.map(r=>{
       const input=r.posValue===null?'':clean(r.posValue);
@@ -447,7 +467,6 @@
 
     document.querySelectorAll('#reconInventoryBody .recon-pos-input').forEach(input=>input.addEventListener('change',()=>render(true)));
 
-    const isCurrent=selectedMonth===currentMonth();
     const hint=document.getElementById('reconInventoryDateHint');
     if(hint)hint.textContent=isCurrent?'本月结存使用当前库存（本月尚未结束）':`本月结存还原至 ${monthEnd(selectedMonth)} 营业结束`;
     const monthTitle=document.getElementById('reconMonthTitle');
