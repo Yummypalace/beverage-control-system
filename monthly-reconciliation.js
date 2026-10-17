@@ -166,6 +166,7 @@
           <button id="reconReload" class="secondary">重新计算</button>
           <button id="reconExportExcel" class="secondary">导出 Excel</button>
           <button id="reconClearPos" class="secondary">清除 POS 销量</button>
+          <button id="reconSavePos">保存 POS 销量</button>
           <span id="reconAutoSaveStatus" class="recon-autosave-status">POS 自动保存</span>
         </div>
       </div>
@@ -223,6 +224,7 @@
     document.getElementById('reconReload').onclick=()=>loadData(true);
     document.getElementById('reconExportExcel').onclick=exportMonthlyReconExcel;
     document.getElementById('reconClearPos').onclick=clearPos;
+    document.getElementById('reconSavePos').onclick=savePos;
     document.querySelectorAll('#monthlyReconciliation .recon-sort-btn').forEach(btn=>{
       btn.onclick=()=>{
         const key=btn.dataset.sort;
@@ -759,7 +761,12 @@
     const item=items.find(x=>String(x.id)===itemId);if(!item)return;
     const monthAtSave=selectedMonth;
     const raw=input.value.trim();
-    const q=raw===''?0:Number(raw);
+    if(raw===''){
+      posSaveTimers.delete(itemId);
+      setAutoSaveStatus('POS 自动保存','');
+      return;
+    }
+    const q=Number(raw);
     if(!Number.isFinite(q)||q<0){
       setAutoSaveStatus('POS 数量不正确','error');
       input.classList.add('recon-pos-error');
@@ -796,26 +803,43 @@
 
   async function savePos(){
     const btn=document.getElementById('reconSavePos');if(!btn)return;
-    const inputs=[...document.querySelectorAll('#reconInventoryBody input[data-item-id]')];
-    const byId=new Map(items.map(x=>[String(x.id),x]));
-    const existing=new Map(posRows.filter(r=>r.month_key===selectedMonth).map(r=>[String(r.item_id),r]));
-    const upserts=[],deletes=[];
+    const draft=draftFromInputs();
+    const upserts=[];
 
-    for(const input of inputs){
-      const item=byId.get(String(input.dataset.itemId));if(!item)continue;
-      const raw=input.value.trim();
+    // 保存按钮用于“整月一次性确认”：
+    // 已填写的沿用输入值；未录入的所有产品统一保存为 0。
+    for(const item of items){
+      const raw=Object.prototype.hasOwnProperty.call(draft,item.id)?String(draft[item.id]).trim():'';
       const q=raw===''?0:Number(raw);
       if(!Number.isFinite(q)||q<0)return alert(`${item.name} 的 POS 数量不正确`);
-      upserts.push({month_key:selectedMonth,item_id:item.id,item_name:item.name,pos_quantity:q,updated_by:typeof userEmail==='function'?userEmail():'',updated_at:new Date().toISOString()});
+      upserts.push({
+        month_key:selectedMonth,
+        item_id:item.id,
+        item_name:item.name,
+        pos_quantity:q,
+        updated_by:typeof userEmail==='function'?userEmail():'',
+        updated_at:new Date().toISOString()
+      });
     }
 
+    posSaveTimers.forEach(timer=>clearTimeout(timer));
+    posSaveTimers.clear();
     btn.disabled=true;btn.textContent='保存中...';
+    setAutoSaveStatus('整月保存中…','saving');
     try{
-      if(upserts.length){const {error}=await sb.from('monthly_pos_sales').upsert(upserts,{onConflict:'month_key,item_id'});if(error)throw error;}
-      if(deletes.length){const {error}=await sb.from('monthly_pos_sales').delete().eq('month_key',selectedMonth).in('item_id',deletes);if(error)throw error;}
-      await loadData();alert(`${monthLabel(selectedMonth)} POS 销量已保存。库存数量没有改变。`);
-    }catch(e){alert('保存失败：'+(e.message||e));}
-    finally{btn.disabled=false;btn.textContent='保存 POS 销量';}
+      if(upserts.length){
+        const {error}=await sb.from('monthly_pos_sales').upsert(upserts,{onConflict:'month_key,item_id'});
+        if(error)throw error;
+      }
+      await loadData();
+      setAutoSaveStatus('已全部保存 ✓','saved');
+      alert(`${monthLabel(selectedMonth)} POS 销量已保存；未录入的产品已自动填 0。库存数量没有改变。`);
+    }catch(e){
+      setAutoSaveStatus('保存失败','error');
+      alert('保存失败：'+(e.message||e));
+    }finally{
+      btn.disabled=false;btn.textContent='保存 POS 销量';
+    }
   }
 
   function addStyle(){
