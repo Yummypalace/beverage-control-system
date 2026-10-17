@@ -3,10 +3,40 @@
   'use strict';
   let installed=false;
   let observer=null;
+  let canEditOldOutType=false;
 
   const CATEGORIES=['正常销售','ENT','FOC','NO Paid','其他'];
 
   function currentMonth(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'}).slice(0,7);}
+  async function checkAdminEditPermission(){
+    try{
+      const {data,error}=await sb.rpc('is_app_admin');
+      canEditOldOutType=!error&&data===true;
+      decorateRows(true);
+    }catch(e){canEditOldOutType=false;}
+  }
+
+  function outTypeLabel(v){
+    return ({NORMAL:'正常销售',ENT:'ENT',FOC:'FOC',NO_PAID:'NO Paid',OTHER:'其他'})[v]||'';
+  }
+
+  async function editOldOutType(tr){
+    if(!canEditOldOutType)return;
+    const logId=Number(tr.dataset.logId||0);
+    const action=(tr.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
+    if(!logId||action!=='OUT')return;
+    const current=tr.dataset.outType||'NORMAL';
+    const raw=prompt('修改用途分类：\n1 = 正常销售\n2 = ENT\n3 = FOC\n4 = NO Paid\n5 = 其他',({NORMAL:'1',ENT:'2',FOC:'3',NO_PAID:'4',OTHER:'5'})[current]||'1');
+    if(raw===null)return;
+    const map={'1':'NORMAL','2':'ENT','3':'FOC','4':'NO_PAID','5':'OTHER','NORMAL':'NORMAL','ENT':'ENT','FOC':'FOC','NO PAID':'NO_PAID','NO_PAID':'NO_PAID','OTHER':'OTHER'};
+    const next=map[String(raw).trim().toUpperCase()];
+    if(!next)return alert('请输入 1-5，或正常销售 / ENT / FOC / NO Paid / 其他');
+    const {error}=await sb.rpc('set_inventory_log_out_type_admin',{p_log_id:logId,p_out_type:next});
+    if(error)return alert('修改失败：'+error.message);
+    tr.dataset.outType=next;
+    if(typeof window.refreshOutNoteHistory==='function')await window.refreshOutNoteHistory();
+  }
+
   function monthLabel(v){const [y,m]=String(v||'').split('-');return y&&m?`${y}年${Number(m)}月`:'';}
   function classifyRow(row){
     const action=(row.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
@@ -36,6 +66,7 @@
     addControls();
     addStyle();
     bindActions();
+    checkAdminEditPermission();
     observer=new MutationObserver(()=>setTimeout(()=>{decorateRows();populateMonths();applyExtraFilters();},0));
     observer.observe(document.getElementById('outNoteBody'),{childList:true});
     setTimeout(()=>{decorateRows();populateMonths(true);applyExtraFilters();},100);
@@ -109,20 +140,26 @@
     else if(!previous)sel.value='';
   }
 
-  function decorateRows(){
+  function decorateRows(force=false){
     document.querySelectorAll('#outNoteBody tr').forEach(tr=>{
-      if(tr.querySelector('.out-note-category-cell'))return;
+      let td=tr.querySelector('.out-note-category-cell');
       const noteCell=tr.querySelector('.out-note-note-cell');
       const itemCell=tr.querySelector('.out-note-item-cell');
       if(!noteCell||!itemCell){
-        const td=tr.querySelector('td[colspan]');if(td)td.colSpan=8;
+        const empty=tr.querySelector('td[colspan]');if(empty)empty.colSpan=8;
         return;
       }
-      const td=document.createElement('td');
-      td.className='out-note-category-cell';
+      if(!td){
+        td=document.createElement('td');
+        td.className='out-note-category-cell';
+        itemCell.after(td);
+      }else if(!force)return;
       td.dataset.category=classifyRow(tr);
-      td.innerHTML=`<span class="out-note-category-pill">${td.dataset.category}</span>`;
-      itemCell.after(td);
+      const action=(tr.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
+      const edit=canEditOldOutType&&action==='OUT'?'<button class="out-note-category-edit secondary" style="margin-left:6px;padding:3px 7px;font-size:11px">修改</button>':'';
+      td.innerHTML=`<span class="out-note-category-pill">${td.dataset.category}</span>${edit}`;
+      const btn=td.querySelector('.out-note-category-edit');
+      if(btn)btn.onclick=()=>editOldOutType(tr);
     });
   }
 
