@@ -5,6 +5,8 @@
   const KEY='beverageLastPageV3';
   let restored=false;
   let attempts=0;
+  let pageGuardInstalled=false;
+  const PAGE_IDS=['dashboard','inventory','commission','logs','settings','outNotes','monthlyReconciliation','corrections'];
 
   function pageFromLink(link){
     const href=link&&link.getAttribute?link.getAttribute('href')||'':'';
@@ -26,6 +28,30 @@
     try{page=(location.hash||'').replace(/^#/,'');}catch(e){}
     if(page)return page;
     try{return localStorage.getItem(KEY)||'';}catch(e){return '';}
+  }
+
+  function installPageGuard(){
+    if(pageGuardInstalled||typeof showPage!=='function')return;
+    pageGuardInstalled=true;
+    const originalShowPage=showPage;
+
+    showPage=function(page){
+      PAGE_IDS.forEach(id=>{
+        if(id===page)return;
+        const el=document.getElementById(id);
+        if(el)el.style.display='none';
+      });
+
+      originalShowPage(page);
+
+      // 再确认一次，避免不同功能脚本互相包裹 showPage 时留下两个页面同时显示。
+      PAGE_IDS.forEach(id=>{
+        const el=document.getElementById(id);if(!el)return;
+        if(id!==page)el.style.display='none';
+      });
+      const target=document.getElementById(page);
+      if(target)target.style.display='block';
+    };
   }
 
   // 用户点击侧边栏时立即记住。
@@ -50,6 +76,7 @@
       return;
     }
 
+    installPageGuard();
     let page=rememberedPage();
     if(!page){restored=true;return;}
 
@@ -70,9 +97,18 @@
     }
   }
 
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',()=>setTimeout(restoreOnce,120));
-  }else{
+  function boot(){
+    const install=()=>{
+      if(typeof showPage==='function')installPageGuard();
+      else setTimeout(install,120);
+    };
+    install();
     setTimeout(restoreOnce,120);
+  }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',boot);
+  }else{
+    boot();
   }
 })();
