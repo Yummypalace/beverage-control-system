@@ -1,8 +1,10 @@
-// 稳定记住最后停留的页面：切走、返回、刷新或重新打开时恢复。
+// 记住最后停留的页面；只在真正重新载入系统时恢复。
+// 切换到 Excel / 其他标签再回来时不做任何重绘，避免画面闪烁。
 (function(){
   'use strict';
-  const KEY='beverageLastPageV2';
-  let restoring=false;
+  const KEY='beverageLastPageV3';
+  let restored=false;
+  let attempts=0;
 
   function pageFromLink(link){
     const href=link&&link.getAttribute?link.getAttribute('href')||'':'';
@@ -15,46 +17,18 @@
     try{history.replaceState(null,'','#'+page);}catch(e){}
   }
 
-  function savedPage(){
+  function activePage(){
+    return pageFromLink(document.querySelector('.side-nav a.active'));
+  }
+
+  function rememberedPage(){
     let page='';
     try{page=(location.hash||'').replace(/^#/,'');}catch(e){}
     if(page)return page;
     try{return localStorage.getItem(KEY)||'';}catch(e){return '';}
   }
 
-  function activePage(){
-    return pageFromLink(document.querySelector('.side-nav a.active'));
-  }
-
-  function canOpen(page){
-    const link=document.querySelector('.side-nav a[href="#'+page+'"]');
-    if(!link)return false;
-    if(page==='settings'&&window.currentAppRole&&window.currentAppRole!=='admin')return false;
-    return true;
-  }
-
-  function restorePage(){
-    if(restoring)return;
-    const app=document.getElementById('appView');
-    if(!app||app.classList.contains('hidden')||typeof showPage!=='function')return;
-
-    let page=savedPage();
-    if(!page)return;
-    if(page==='settings'&&window.currentAppRole&&window.currentAppRole!=='admin'){
-      page='dashboard';
-      savePage(page);
-    }
-    if(!canOpen(page))return;
-
-    const current=activePage();
-    if(current===page)return;
-
-    restoring=true;
-    try{showPage(page);}catch(e){}
-    setTimeout(()=>{restoring=false;},180);
-  }
-
-  // 用户点侧边栏时立即保存，不依赖各页面自己的 showPage 实现。
+  // 用户点击侧边栏时立即记住。
   document.addEventListener('click',e=>{
     const link=e.target&&e.target.closest?e.target.closest('.side-nav a'):null;
     if(!link)return;
@@ -62,50 +36,43 @@
     if(page)savePage(page);
   },true);
 
-  // 如果页面内部代码主动切页，也在最终稳定后记录当前页。
-  const observer=new MutationObserver(()=>{
-    const page=activePage();
-    if(page&&!restoring){
-      const remembered=savedPage();
-      // 启动时工作台的自动激活，不覆盖已经记住的其他页面。
-      if(!remembered||remembered===page)savePage(page);
-    }
-  });
-
-  function startObserver(){
-    const nav=document.querySelector('.side-nav');
-    if(nav)observer.observe(nav,{subtree:true,attributes:true,attributeFilter:['class']});
-  }
-
+  // 页面真正离开/关闭时保存当前页，但切回来时不主动恢复、不重绘。
   window.addEventListener('pagehide',()=>{
     const page=activePage();
     if(page)savePage(page);
   });
 
-  let returnTimer=null;
-  function scheduleRestore(){
-    clearTimeout(returnTimer);
-    returnTimer=setTimeout(()=>restorePage(),180);
-  }
-
-  document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='hidden'){
-      const page=activePage();
-      if(page)savePage(page);
+  function restoreOnce(){
+    if(restored)return;
+    const app=document.getElementById('appView');
+    if(!app||app.classList.contains('hidden')||typeof showPage!=='function'){
+      if(attempts++<40)setTimeout(restoreOnce,150);
       return;
     }
-    // 切回系统时只检查一次；如果本来就在正确页面，不重绘。
-    scheduleRestore();
-  });
 
-  window.addEventListener('focus',scheduleRestore);
+    let page=rememberedPage();
+    if(!page){restored=true;return;}
 
-  function boot(){
-    startObserver();
-    // 动态页面（备注、月结、错单）脚本需要一点时间加载，所以连续尝试恢复。
-    [180,500,1000,1800].forEach(ms=>setTimeout(()=>restorePage(),ms));
+    if(page==='settings'&&window.currentAppRole&&window.currentAppRole!=='admin'){
+      page='dashboard';
+      savePage(page);
+    }
+
+    const link=document.querySelector('.side-nav a[href="#'+page+'"]');
+    if(!link){
+      if(attempts++<40)setTimeout(restoreOnce,150);
+      return;
+    }
+
+    restored=true;
+    if(activePage()!==page){
+      try{showPage(page);}catch(e){}
+    }
   }
 
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);
-  else boot();
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',()=>setTimeout(restoreOnce,120));
+  }else{
+    setTimeout(restoreOnce,120);
+  }
 })();
