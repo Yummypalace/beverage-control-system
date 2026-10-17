@@ -4,18 +4,26 @@
   let installed=false;
   let observer=null;
 
-  const CATEGORIES=['FOC','厨房使用','未付款 / 员工使用','招待 / ENT','其他'];
+  const CATEGORIES=['正常销售','ENT','FOC','NO Paid','其他'];
 
   function currentMonth(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'}).slice(0,7);}
   function monthLabel(v){const [y,m]=String(v||'').split('-');return y&&m?`${y}年${Number(m)}月`:'';}
-  function classify(note){
-    const raw=String(note||'').trim();
+  function classifyRow(row){
+    const action=(row.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
+    const outType=(row.dataset.outType||'').trim();
+    if(action==='OUT'){
+      if(outType==='NORMAL')return '正常销售';
+      if(outType==='ENT')return 'ENT';
+      if(outType==='FOC')return 'FOC';
+      if(outType==='NO_PAID')return 'NO Paid';
+      if(outType==='OTHER')return '其他';
+    }
+    const raw=(row.querySelector('.out-note-note-cell')?.textContent||'').trim();
     const s=raw.toLowerCase().replace(/\s+/g,' ');
-    if(/(^|[^a-z])foc([^a-z]|$)/i.test(raw)||s.includes('complimentary')||raw.includes('免费'))return 'FOC';
-    if(raw.includes('厨房')||s.includes('kitchen'))return '厨房使用';
-    if(s.includes('no paid')||s.includes('not paid')||s.includes('unpaid')||raw.includes('没paid')||raw.includes('没 paid')||raw.includes('未付款')||raw.includes('没付款')||raw.includes('员工'))return '未付款 / 员工使用';
-    if(/(^|[^a-z])ent([\s\-_/]|$)/i.test(raw)||s.includes('entertain')||raw.includes('招待'))return '招待 / ENT';
-    return '其他';
+    if(/(^|[^a-z])foc([^a-z]|$)/i.test(raw)||s.includes('complimentary')||raw.includes('免费')||raw.includes('厨房')||s.includes('kitchen')||raw.includes('员工'))return 'FOC';
+    if(s.includes('no paid')||s.includes('not paid')||s.includes('unpaid')||raw.includes('没paid')||raw.includes('没 paid')||raw.includes('未付款')||raw.includes('没付款'))return 'NO Paid';
+    if(/(^|[^a-z])ent([\s\-_/]|$)/i.test(raw)||s.includes('entertain')||raw.includes('招待'))return 'ENT';
+    return action==='OUT'?'正常销售':'其他';
   }
 
   function wait(){
@@ -112,7 +120,7 @@
       }
       const td=document.createElement('td');
       td.className='out-note-category-cell';
-      td.dataset.category=classify(noteCell.textContent||'');
+      td.dataset.category=classifyRow(tr);
       td.innerHTML=`<span class="out-note-category-pill">${td.dataset.category}</span>`;
       itemCell.after(td);
     });
