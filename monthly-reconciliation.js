@@ -169,7 +169,7 @@
         <div class="recon-control-actions">
           <button id="reconReload" class="secondary">重新计算</button>
           <button id="reconExportExcel" class="secondary">导出 Excel</button>
-          <button id="reconClearPos" class="secondary">清除 POS 销量</button>
+          <button id="reconClearPos" class="secondary">清除</button>
           <button id="reconSavePos">保存 POS 销量</button>
           <span id="reconAutoSaveStatus" class="recon-autosave-status">POS 自动保存</span>
         </div>
@@ -788,20 +788,28 @@
 
   async function clearPos(){
     const btn=document.getElementById('reconClearPos');if(!btn)return;
-    if(!confirm(monthLabel(selectedMonth)+' 的 POS 销量会全部清空并显示未录入。确定继续吗？'))return;
+    if(!confirm(monthLabel(selectedMonth)+' 的 POS 销量和 ENT (实际) 会一起清除。确定继续吗？'))return;
     btn.disabled=true;btn.textContent='清除中...';
     try{
-      const {error}=await sb.from('monthly_pos_sales').delete().eq('month_key',selectedMonth);
-      if(error)throw error;
+      const [posRes,entRes]=await Promise.all([
+        sb.from('monthly_pos_sales').delete().eq('month_key',selectedMonth),
+        sb.from('monthly_ent_actual').delete().eq('month_key',selectedMonth)
+      ]);
+      if(posRes.error)throw posRes.error;
+      if(entRes.error)throw entRes.error;
+
       posRows=posRows.filter(r=>r.month_key!==selectedMonth);
+      entActualRows=entActualRows.filter(r=>r.month_key!==selectedMonth);
+
       const blankDraft={};
       items.forEach(item=>blankDraft[item.id]='');
       render(false,blankDraft);
-      alert(monthLabel(selectedMonth)+' POS 销量已清除。库存没有改变。');
+
+      alert(monthLabel(selectedMonth)+' 已清除 POS 销量和 ENT (实际)。ENT (实际) 已恢复默认 0，库存没有改变。');
     }catch(e){
       alert('清除失败：'+(e.message||e));
     }finally{
-      btn.disabled=false;btn.textContent='清除 POS 销量';
+      btn.disabled=false;btn.textContent='清除';
     }
   }
 
