@@ -181,7 +181,7 @@
 
       <div class="card recon-guide">
         <b>核对公式：</b>
-        <span>上月结存 + 本月入库 − 本月结存 = 本月实际减少；本月实际减少 = POS 销量 + ENT + FOC + 厨房使用 + NO Paid + 取消入库 + 其他 + 借出 − 还回。</span>
+        <span>上月结存 + 本月入库 − 本月结存 = 本月实际减少；本月实际减少 = POS 销量 + FOC + 厨房使用 + NO Paid + 取消入库 + 其他 + 借出 − 还回。ENT 已包含在 POS 销量内，仅作分类参考。</span>
       </div>
 
       <div class="card recon-card">
@@ -200,7 +200,7 @@
               <th>本月入库</th>
               <th>本月实际减少</th>
               <th>POS 销量</th>
-              <th>ENT</th>
+              <th class="recon-ent-head" title="ENT 已包含在 POS 销量内，只作分类参考，不参与对账差异计算">ENT（记录）</th>
               <th>FOC</th>
               <th>厨房使用</th>
               <th>NO Paid</th>
@@ -497,7 +497,7 @@
         posValue=saved?num(saved.pos_quantity):(monthHasSavedPos?0:null);
       }
 
-      const explained=posValue===null?null:posValue+s.ent+s.foc+s.kitchen+s.noPaid+s.cancelIn+s.other+s.borrow-s.returned;
+      const explained=posValue===null?null:posValue+s.foc+s.kitchen+s.noPaid+s.cancelIn+s.other+s.borrow-s.returned;
       const diff=explained===null?null:explained-sold;
       const uncertain=!!(openState?.uncertain||closeState?.uncertain);
       return {item,...s,opening,closing,sold,posValue,explained,diff,uncertain};
@@ -603,7 +603,7 @@
   function updateSummary(rows){
     const sold=clean(rows.reduce((s,r)=>s+r.sold,0));
     const pos=clean(rows.reduce((s,r)=>s+(r.posValue===null?0:r.posValue),0));
-    const special=clean(rows.reduce((s,r)=>s+r.ent+r.foc+r.kitchen+r.noPaid+r.cancelIn+r.other+r.borrow-r.returned,0));
+    const special=clean(rows.reduce((s,r)=>s+r.foc+r.kitchen+r.noPaid+r.cancelIn+r.other+r.borrow-r.returned,0));
     const issue=clean(rows.reduce((s,r)=>s+(r.uncertain||r.diff===null?0:Math.abs(num(r.diff))),0));
     document.getElementById('reconSoldTotal').textContent=sold;
     document.getElementById('reconPosTotal').textContent=pos;
@@ -670,7 +670,7 @@
         '本月入库':clean(r.inbound),
         '本月实际减少':clean(r.sold),
         'POS 销量':r.posValue===null?'':clean(r.posValue),
-        'ENT':clean(r.ent),
+        'ENT（记录）':clean(r.ent),
         'FOC':clean(r.foc),
         '厨房使用':clean(r.kitchen),
         'NO Paid':clean(r.noPaid),
@@ -706,7 +706,7 @@
           '月份':monthLabel(selectedMonth),
           '本月实际减少':clean(rows.reduce((s,r)=>s+r.sold,0)),
           'POS 销量':clean(rows.reduce((s,r)=>s+(r.posValue===null?0:r.posValue),0)),
-          '特殊用途 / 借出净额':clean(rows.reduce((s,r)=>s+r.ent+r.foc+r.kitchen+r.noPaid+r.cancelIn+r.other+r.borrow-r.returned,0)),
+          '特殊用途 / 借出净额':clean(rows.reduce((s,r)=>s+r.foc+r.kitchen+r.noPaid+r.cancelIn+r.other+r.borrow-r.returned,0)),
           '待查差异':clean(rows.reduce((s,r)=>s+(r.uncertain||r.diff===null?0:Math.abs(num(r.diff))),0))
         }];
       const sws=XLSX.utils.json_to_sheet(summaryRows);
@@ -885,7 +885,7 @@
 .recon-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px;background:#f8fafc}.recon-control-left{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}.recon-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px;min-width:190px}.recon-controls select,.recon-controls input{min-height:42px}.recon-search-label{min-width:260px!important}.recon-control-actions{display:flex;gap:8px;align-items:center}.recon-control-actions button{min-height:42px}.recon-autosave-status{display:inline-flex;align-items:center;min-height:42px;padding:0 12px;border-radius:10px;background:#eef2f6;color:#667085;font-size:13px;font-weight:700;white-space:nowrap}.recon-autosave-status[data-state="saving"],.recon-autosave-status[data-state="pending"]{color:#b7791f}.recon-autosave-status[data-state="saved"]{color:#087f5b;background:#edf9f4}.recon-autosave-status[data-state="error"]{color:#c92a2a;background:#fff1f1}.recon-pos-error{border-color:#c92a2a!important;box-shadow:0 0 0 2px rgba(201,42,42,.08)!important}
 .recon-summary{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:12px}.recon-summary .card{padding:13px 14px}.recon-summary small{display:block;color:#667085}.recon-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
 .recon-guide{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#f7f9fc;color:#475467;font-size:13px;line-height:1.6}.recon-guide b{color:#173b5e;white-space:nowrap}
-.recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-sort-btn{background:none!important;color:#667085!important;padding:0!important;border:0!important;border-radius:0!important;font-size:12px!important;font-weight:700!important;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.recon-sort-btn:hover{color:#173b5e!important}.recon-sort-arrow{font-size:10px;min-width:10px;text-align:center}.recon-table{table-layout:auto}.recon-table thead th{position:sticky}.recon-col-resizer{position:absolute;right:-4px;top:0;width:8px;height:100%;cursor:col-resize;z-index:8;user-select:none}.recon-col-resizer:hover{background:rgba(23,59,94,.12)}body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.recon-resizing *{cursor:col-resize!important}.recon-table-head{position:relative;min-height:28px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}.recon-table-wrap{max-height:64vh;overflow:auto}.recon-table{min-width:1780px}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-pos-input{width:92px;min-height:36px;padding:7px 8px}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
+.recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-sort-btn{background:none!important;color:#667085!important;padding:0!important;border:0!important;border-radius:0!important;font-size:12px!important;font-weight:700!important;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.recon-sort-btn:hover{color:#173b5e!important}.recon-sort-arrow{font-size:10px;min-width:10px;text-align:center}.recon-ent-head{background:#fff7e6!important;color:#9a6700!important}.recon-table tbody td:nth-child(8){background:#fffaf0}.recon-table{table-layout:auto}.recon-table thead th{position:sticky}.recon-col-resizer{position:absolute;right:-4px;top:0;width:8px;height:100%;cursor:col-resize;z-index:8;user-select:none}.recon-col-resizer:hover{background:rgba(23,59,94,.12)}body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.recon-resizing *{cursor:col-resize!important}.recon-table-head{position:relative;min-height:28px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}.recon-table-wrap{max-height:64vh;overflow:auto}.recon-table{min-width:1780px}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-pos-input{width:92px;min-height:36px;padding:7px 8px}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
 @media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}}
 @media(max-width:620px){.recon-summary{grid-template-columns:1fr 1fr}.recon-control-actions{display:grid;grid-template-columns:1fr 1fr}.recon-control-actions button{width:100%}.recon-guide{display:block}.recon-guide b{display:block;margin-bottom:4px}}
 `;document.head.appendChild(s);
