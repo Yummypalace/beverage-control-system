@@ -11,6 +11,7 @@
   let reconSortKey='name';
   let reconSortDir=1;
   const posSaveTimers=new Map();
+  const pendingPosSaves=new Map();
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function num(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
@@ -584,8 +585,8 @@
 
     document.querySelectorAll('#reconInventoryBody .recon-pos-input').forEach(input=>{
       input.addEventListener('input',()=>{
-        render(true);
         schedulePosAutoSave(input);
+        render(true);
       });
       input.addEventListener('change',()=>schedulePosAutoSave(input,true));
       input.addEventListener('blur',()=>schedulePosAutoSave(input,true));
@@ -748,33 +749,43 @@
   function schedulePosAutoSave(input,immediate=false){
     if(!input||!input.dataset.itemId)return;
     const itemId=String(input.dataset.itemId);
+    const raw=String(input.value||'').trim();
+    const monthAtSave=selectedMonth;
+
     const old=posSaveTimers.get(itemId);
     if(old)clearTimeout(old);
-    setAutoSaveStatus('等待自动保存…','pending');
-    const timer=setTimeout(()=>saveSinglePos(input),immediate?0:700);
-    posSaveTimers.set(itemId,timer);
-  }
 
-  async function saveSinglePos(input){
-    if(!input||!document.body.contains(input))return;
-    const itemId=String(input.dataset.itemId||'');
-    const item=items.find(x=>String(x.id)===itemId);if(!item)return;
-    const monthAtSave=selectedMonth;
-    const raw=input.value.trim();
     if(raw===''){
+      pendingPosSaves.delete(itemId);
       posSaveTimers.delete(itemId);
       setAutoSaveStatus('POS 自动保存','');
       return;
     }
+
+    pendingPosSaves.set(itemId,{itemId,raw,monthAtSave});
+    setAutoSaveStatus('等待自动保存…','pending');
+
+    const timer=setTimeout(()=>{
+      posSaveTimers.delete(itemId);
+      const pending=pendingPosSaves.get(itemId);
+      if(pending)saveSinglePosValue(pending);
+    },immediate?0:600);
+
+    posSaveTimers.set(itemId,timer);
+  }
+
+  async function saveSinglePosValue(pending){
+    if(!pending)return;
+    const {itemId,raw,monthAtSave}=pending;
+    const item=items.find(x=>String(x.id)===String(itemId));if(!item)return;
+
     const q=Number(raw);
     if(!Number.isFinite(q)||q<0){
       setAutoSaveStatus('POS 数量不正确','error');
-      input.classList.add('recon-pos-error');
       return;
     }
-    input.classList.remove('recon-pos-error');
-    setAutoSaveStatus('保存中…','saving');
 
+    setAutoSaveStatus('保存中…','saving');
     const payload={
       month_key:monthAtSave,
       item_id:item.id,
@@ -795,11 +806,35 @@
       return;
     }
 
-    const idx=posRows.findIndex(r=>String(r.item_id)===itemId&&r.month_key===monthAtSave);
+    const idx=posRows.findIndex(r=>String(r.item_id)===String(itemId)&&r.month_key===monthAtSave);
     if(idx>=0)posRows[idx]=data||payload;else posRows.push(data||payload);
-    posSaveTimers.delete(itemId);
+
+    const latest=pendingPosSaves.get(String(itemId));
+    if(latest&&latest.raw===raw&&latest.monthAtSave===monthAtSave){
+      pendingPosSaves.delete(String(itemId));
+    }
     setAutoSaveStatus('已自动保存 ✓','saved');
   }
+
+  function flushPendingPosSaves(){
+    posSaveTimers.forEach(timer=>clearTimeout(timer));
+    posSaveTimers.clear();
+    pendingPosSaves.clear();
+    const pending=[...pendingPosSaves.values()];
+    pending.forEach(p=>saveSinglePosValue(p));
+  }
+
+  // 离开月结页面、切到其他标签或窗口时，把尚未到 600ms 的输入也立即保存。
+  document.addEventListener('click',e=>{
+    const link=e.target&&e.target.closest?e.target.closest('.side-nav a'):null;
+    if(link&&pendingPosSaves.size)flushPendingPosSaves();
+  },true);
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='hidden'&&pendingPosSaves.size)flushPendingPosSaves();
+  });
+  window.addEventListener('pagehide',()=>{
+    if(pendingPosSaves.size)flushPendingPosSaves();
+  });
 
   async function savePos(){
     const btn=document.getElementById('reconSavePos');if(!btn)return;
