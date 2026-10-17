@@ -558,7 +558,7 @@
         <td>${clean(r.opening)}</td>
         <td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-        <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+        <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
       </tr>`).join('')||'<tr><td colspan="19">暂无饮料资料</td></tr>';
 
       const hint=document.getElementById('reconInventoryDateHint');
