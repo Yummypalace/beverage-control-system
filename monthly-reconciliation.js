@@ -426,13 +426,14 @@
     if(isCurrent){
       body.innerHTML=rows.map(r=>`<tr>
         <td><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
-        <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
+        <td>${clean(r.opening)}</td>
+        <td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
       </tr>`).join('')||'<tr><td colspan="16">暂无饮料资料</td></tr>';
 
       const hint=document.getElementById('reconInventoryDateHint');
-      if(hint)hint.textContent='本月尚未结束，月结数据暂不显示';
+      if(hint)hint.textContent='本月尚未结束，仅显示上月结存';
       const monthTitle=document.getElementById('reconMonthTitle');
       if(monthTitle)monthTitle.textContent=monthLabel(selectedMonth);
 
