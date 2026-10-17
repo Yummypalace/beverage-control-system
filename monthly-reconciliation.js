@@ -775,21 +775,6 @@
       }
       XLSX.utils.book_append_sheet(wb,ws,'月结核对');
 
-      const summaryRows=isCurrent
-        ?[{'月份':monthLabel(selectedMonth),'说明':'本月尚未结束，仅显示上月结存'}]
-        :[{
-          '月份':monthLabel(selectedMonth),
-          '上月结存总数':clean(rows.reduce((s,r)=>s+r.opening,0)),
-          '本月结存总数':clean(rows.reduce((s,r)=>s+r.closing,0)),
-          '本月实际减少':clean(rows.reduce((s,r)=>s+r.sold,0)),
-          'POS 销量':clean(rows.reduce((s,r)=>s+(r.posValue===null?0:r.posValue),0)),
-          '特殊用途 / 借出净额':clean(rows.reduce((s,r)=>s+r.foc+r.kitchen+r.noPaid+r.cancelIn+r.other+r.borrow-r.returned,0)),
-          '待查差异':clean(rows.reduce((s,r)=>s+(r.uncertain||r.diff===null?0:Math.abs(num(r.diff))),0))
-        }];
-      const sws=XLSX.utils.json_to_sheet(summaryRows);
-      sws['!cols']=[{wch:14},{wch:16},{wch:14},{wch:24},{wch:14}];
-      XLSX.utils.book_append_sheet(wb,sws,'汇总');
-
       XLSX.writeFile(wb,`月结核对_${selectedMonth}.xlsx`);
     }catch(e){
       alert('导出失败：'+String(e?.message||e));
