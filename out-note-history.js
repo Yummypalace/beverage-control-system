@@ -202,7 +202,7 @@
     const grouped=[...groups.values()].sort((a,b)=>b.qty-a.qty||b.count-a.count||a.note.localeCompare(b.note));
     groupBody.innerHTML=grouped.map(g=>`<tr><td><b>${h(g.note)}</b></td><td>${g.count}</td><td>${Number(g.qty.toFixed(2))}</td></tr>`).join('')||'<tr><td colspan="3">暂无有备注的库存操作记录</td></tr>';
 
-    body.innerHTML=filtered.map(r=>`<tr>
+    body.innerHTML=filtered.map(r=>`<tr data-out-type="${h(r.out_type||'')}">
       <td class="out-note-date-cell">${h(r._date)}</td>
       <td class="out-note-item-cell"><b>${h(r.item_name||'')}</b></td>
       <td class="out-note-action-cell" data-action="${h(r.action||'')}"><span class="pill">${h(r._actionLabel)}</span></td>
