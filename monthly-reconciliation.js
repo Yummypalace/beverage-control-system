@@ -8,6 +8,8 @@
   let posRows=[];
   let loading=false;
   let selectedMonth='';
+  let reconSortKey='name';
+  let reconSortDir=1;
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function num(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
@@ -60,7 +62,7 @@
     return Number(a.id||0)-Number(b.id||0);
   }
 
-  const RECON_WIDTHS_KEY='monthlyReconColumnWidthsV1';
+  const RECON_WIDTHS_KEY='monthlyReconColumnWidthsV2';
 
   function loadReconColumnWidths(){
     try{return JSON.parse(localStorage.getItem(RECON_WIDTHS_KEY)||'{}')||{};}catch(e){return {};}
@@ -184,7 +186,8 @@
         <div class="tablewrap recon-table-wrap">
           <table class="recon-table">
             <thead><tr>
-              <th>饮料</th>
+              <th><button type="button" class="recon-sort-btn" data-sort="name">名称 <span class="recon-sort-arrow">▲</span></button></th>
+              <th><button type="button" class="recon-sort-btn" data-sort="category">类别 <span class="recon-sort-arrow">↕</span></button></th>
               <th>上月结存</th>
               <th>本月结存</th>
               <th>本月入库</th>
@@ -201,7 +204,7 @@
               <th>对账差异</th>
               <th>状态</th>
             </tr></thead>
-            <tbody id="reconInventoryBody"><tr><td colspan="16">读取中...</td></tr></tbody>
+            <tbody id="reconInventoryBody"><tr><td colspan="17">读取中...</td></tr></tbody>
           </table>
         </div>
       </div>`;
@@ -214,6 +217,16 @@
     document.getElementById('reconReload').onclick=()=>loadData(true);
     document.getElementById('reconClearPos').onclick=clearPos;
     document.getElementById('reconSavePos').onclick=savePos;
+    document.querySelectorAll('#monthlyReconciliation .recon-sort-btn').forEach(btn=>{
+      btn.onclick=()=>{
+        const key=btn.dataset.sort;
+        if(reconSortKey===key)reconSortDir*=-1;
+        else{reconSortKey=key;reconSortDir=1;}
+        updateSortArrows();
+        render(true);
+      };
+    });
+    updateSortArrows();
   }
 
   function extendNavigation(){
@@ -256,7 +269,7 @@
     loading=true;
     const status=document.getElementById('reconStatus');
     const body=document.getElementById('reconInventoryBody');
-    if(body)body.innerHTML='<tr><td colspan="16">重新计算中...</td></tr>';
+    if(body)body.innerHTML='<tr><td colspan="17">重新计算中...</td></tr>';
     if(status)status.textContent='重新计算中...';
     try{
       const [logs,pos]=await Promise.all([
@@ -271,7 +284,7 @@
       render(false,blankDraft);
       if(status)status.textContent='已重新计算';
     }catch(e){
-      if(body)body.innerHTML=`<tr><td colspan="16">重新计算失败：${h(e.message||e)}</td></tr>`;
+      if(body)body.innerHTML=`<tr><td colspan="17">重新计算失败：${h(e.message||e)}</td></tr>`;
       if(status)status.textContent='重新计算失败';
     }finally{loading=false;}
   }
@@ -282,7 +295,7 @@
     loading=true;
     const status=document.getElementById('reconStatus');
     const body=document.getElementById('reconInventoryBody');
-    if(body)body.innerHTML='<tr><td colspan="16">读取中...</td></tr>';
+    if(body)body.innerHTML='<tr><td colspan="17">读取中...</td></tr>';
     if(status)status.textContent='读取中...';
     try{
       const [logs,pos]=await Promise.all([
@@ -292,7 +305,7 @@
       allLogs=logs;posRows=pos;populateMonths();render(false,draft);
       if(status)status.textContent='已更新';
     }catch(e){
-      if(body)body.innerHTML=`<tr><td colspan="16">读取失败：${h(e.message||e)}</td></tr>`;
+      if(body)body.innerHTML=`<tr><td colspan="17">读取失败：${h(e.message||e)}</td></tr>`;
       if(status)status.textContent='读取失败';
     }finally{loading=false;}
   }
@@ -432,13 +445,21 @@
     return draft;
   }
 
+  function updateSortArrows(){
+    document.querySelectorAll('#monthlyReconciliation .recon-sort-btn').forEach(btn=>{
+      const arrow=btn.querySelector('.recon-sort-arrow');
+      if(!arrow)return;
+      arrow.textContent=btn.dataset.sort===reconSortKey?(reconSortDir===1?'▲':'▼'):'↕';
+    });
+  }
+
   function computeRows(draftPos){
     const open=snapshotAt(previousMonthEnd(selectedMonth));
     const close=snapshotAt(monthEnd(selectedMonth));
     const stats=monthStats();
     const pmap=posMap();
 
-    return [...items].sort((a,b)=>String(a.name).localeCompare(String(b.name))).map(item=>{
+    const rows=[...items].map(item=>{
       const s=stats.get(String(item.id))||{inbound:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0};
       const openState=open.get(String(item.id));
       const closeState=close.get(String(item.id));
@@ -463,6 +484,15 @@
       const uncertain=!!(openState?.uncertain||closeState?.uncertain);
       return {item,...s,opening,closing,sold,posValue,explained,diff,uncertain};
     });
+
+    rows.sort((a,b)=>{
+      const av=reconSortKey==='category'?String(a.item.category||''):String(a.item.name||'');
+      const bv=reconSortKey==='category'?String(b.item.category||''):String(b.item.name||'');
+      const primary=av.localeCompare(bv,'zh-CN',{numeric:true,sensitivity:'base'});
+      if(primary!==0)return primary*reconSortDir;
+      return String(a.item.name||'').localeCompare(String(b.item.name||''),'zh-CN',{numeric:true,sensitivity:'base'});
+    });
+    return rows;
   }
 
   function diffText(v,uncertain){
@@ -488,11 +518,12 @@
     if(isCurrent){
       body.innerHTML=rows.map(r=>`<tr>
         <td><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
+        <td>${h(r.item.category||'-')}</td>
         <td>${clean(r.opening)}</td>
         <td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-      </tr>`).join('')||'<tr><td colspan="16">暂无饮料资料</td></tr>';
+      </tr>`).join('')||'<tr><td colspan="17">暂无饮料资料</td></tr>';
 
       const hint=document.getElementById('reconInventoryDateHint');
       if(hint)hint.textContent='本月尚未结束，仅显示上月结存';
@@ -510,6 +541,7 @@
       const alert=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001;
       return `<tr class="${alert?'recon-alert-row':''}">
         <td><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
+        <td>${h(r.item.category||'-')}</td>
         <td>${clean(r.opening)}</td>
         <td>${clean(r.closing)}</td>
         <td>${clean(r.inbound)}</td>
@@ -526,7 +558,7 @@
         <td>${diffText(r.diff,r.uncertain)}</td>
         <td>${statusText(r)}</td>
       </tr>`;
-    }).join('')||'<tr><td colspan="16">暂无饮料资料</td></tr>';
+    }).join('')||'<tr><td colspan="17">暂无饮料资料</td></tr>';
 
     document.querySelectorAll('#reconInventoryBody .recon-pos-input').forEach(input=>input.addEventListener('change',()=>render(true)));
 
@@ -600,7 +632,7 @@
 .recon-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px;background:#f8fafc}.recon-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px;min-width:190px}.recon-controls select{min-height:42px}.recon-control-actions{display:flex;gap:8px}.recon-control-actions button{min-height:42px}
 .recon-summary{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:12px}.recon-summary .card{padding:13px 14px}.recon-summary small{display:block;color:#667085}.recon-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
 .recon-guide{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#f7f9fc;color:#475467;font-size:13px;line-height:1.6}.recon-guide b{color:#173b5e;white-space:nowrap}
-.recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-table{table-layout:auto}.recon-table thead th{position:sticky}.recon-col-resizer{position:absolute;right:-4px;top:0;width:8px;height:100%;cursor:col-resize;z-index:8;user-select:none}.recon-col-resizer:hover{background:rgba(23,59,94,.12)}body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.recon-resizing *{cursor:col-resize!important}.recon-table-head{position:relative;min-height:28px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}.recon-table-wrap{max-height:64vh;overflow:auto}.recon-table{min-width:1780px}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-pos-input{width:92px;min-height:36px;padding:7px 8px}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
+.recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-sort-btn{background:none!important;color:#667085!important;padding:0!important;border:0!important;border-radius:0!important;font-size:12px!important;font-weight:700!important;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.recon-sort-btn:hover{color:#173b5e!important}.recon-sort-arrow{font-size:10px;min-width:10px;text-align:center}.recon-table{table-layout:auto}.recon-table thead th{position:sticky}.recon-col-resizer{position:absolute;right:-4px;top:0;width:8px;height:100%;cursor:col-resize;z-index:8;user-select:none}.recon-col-resizer:hover{background:rgba(23,59,94,.12)}body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.recon-resizing *{cursor:col-resize!important}.recon-table-head{position:relative;min-height:28px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}.recon-table-wrap{max-height:64vh;overflow:auto}.recon-table{min-width:1780px}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-pos-input{width:92px;min-height:36px;padding:7px 8px}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
 @media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-actions{justify-content:flex-end}}
 @media(max-width:620px){.recon-summary{grid-template-columns:1fr 1fr}.recon-control-actions{display:grid;grid-template-columns:1fr 1fr}.recon-control-actions button{width:100%}.recon-guide{display:block}.recon-guide b{display:block;margin-bottom:4px}}
 `;document.head.appendChild(s);
