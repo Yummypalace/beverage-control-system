@@ -205,7 +205,7 @@
     body.innerHTML=filtered.map(r=>`<tr data-log-id="${h(r.id||'')}" data-out-type="${h(r.out_type||'')}">
       <td class="out-note-date-cell">${h(r._date)}</td>
       <td class="out-note-item-cell"><b>${h(r.item_name||'')}</b></td>
-      <td class="out-note-action-cell" data-action="${h(r.action||'')}"><span class="pill">${h(r._actionLabel)}</span></td>
+      <td class="out-note-action-cell" data-action="${h(r.action||'')}"><span class="pill action-pill action-${h(String(r.action||'').toLowerCase())}">${h(r._actionLabel)}</span></td>
       <td class="out-note-qty-cell">${Number(r.quantity||0)}</td>
       <td class="out-note-location-cell">${h(r._location||'')}</td>
       <td class="out-note-note-cell">${h(r._businessNote||'')}</td>
@@ -221,6 +221,15 @@
 #outNoteFilters label{font-size:12px;color:#667085;font-weight:600;display:flex;flex-direction:column;gap:6px;min-width:0}#outNoteFilters input,#outNoteFilters select{width:100%;min-height:42px}.out-note-actions{display:flex;gap:8px;align-items:end}.out-note-actions button{min-height:42px;white-space:nowrap}
 .out-note-summary{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}.out-note-summary span{display:inline-flex;gap:6px;align-items:center;background:#edf3f8;color:#475467;border-radius:10px;padding:8px 12px;font-size:13px}.out-note-summary b{color:#173b5e;font-size:15px}
 .out-note-card{margin-top:12px;padding:14px}.out-note-card .section-head h3{margin:0;font-size:17px}.out-note-summary-wrap{max-height:260px;overflow:auto}.out-note-detail-wrap{max-height:62vh;overflow:auto}#outNotes table{min-width:900px}#outNotes thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
+.action-pill{font-weight:700;border:1px solid transparent}
+.action-in{background:#e8f7ef!important;color:#287553!important;border-color:#d4efe0!important}
+.action-out{background:#eaf1f8!important;color:#315b7d!important;border-color:#dbe7f1!important}
+.action-transfer{background:#f0eefb!important;color:#5f5592!important;border-color:#e3dff5!important}
+.action-borrow{background:#fff4df!important;color:#9a6a1f!important;border-color:#f8e7bf!important}
+.action-return{background:#eaf8f6!important;color:#2b746b!important;border-color:#d5efeb!important}
+.action-adjust{background:#f3eff8!important;color:#72568e!important;border-color:#e7dff0!important}
+.action-create{background:#eef7ea!important;color:#557a45!important;border-color:#dfedd9!important}
+.action-edit{background:#f6f1e8!important;color:#7b6643!important;border-color:#ece2d3!important}
 @media(max-width:1150px){#outNoteFilters{grid-template-columns:1fr 1fr}.out-note-actions{grid-column:1/-1}}
 @media(max-width:620px){#outNoteFilters{grid-template-columns:1fr}.out-note-actions{grid-column:1}.out-note-actions button{flex:1}}
 `;document.head.appendChild(s);
