@@ -8,6 +8,23 @@
   function install(){
     if(installed)return;installed=true;
     const nav=document.querySelector('.side-nav');
+
+    // 固定侧边栏顺序，后加载的页面也不能把顺序打乱。
+    if(!document.getElementById('fixedSidebarOrderStyle')){
+      const s=document.createElement('style');
+      s.id='fixedSidebarOrderStyle';
+      s.textContent=`
+.side-nav a[href="#dashboard"]{order:10}
+.side-nav a[href="#inventory"]{order:20}
+.side-nav a[href="#commission"]{order:30}
+.side-nav a[href="#outNotes"]{order:40}
+.side-nav a[href="#monthlyReconciliation"]{order:50}
+.side-nav a[href="#corrections"]{order:60}
+.side-nav a[href="#settings"]{order:70}
+.side-nav a[href="#logs"]{order:80}
+`;
+      document.head.appendChild(s);
+    }
     const logsLink=nav.querySelector('a[href="#logs"]');
     const settingsLink=nav.querySelector('a[href="#settings"]');
     if(logsLink)logsLink.remove();
