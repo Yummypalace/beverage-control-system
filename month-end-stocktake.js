@@ -240,52 +240,68 @@
     return first==='冰箱'?'fridge':first==='仓库'?'warehouse':'';
   }
 
-  function parseEdit(note){
+  function parsePair(note,preferAfter=false){
     const s=String(note||'');
-    const m=s.match(/调整前\s*冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    let m=null;
+    if(preferAfter){
+      m=s.match(/调整后\s*冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    }
+    if(!m)m=s.match(/(?:新增饮料|编辑资料)（冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)）/);
     return m?{fridge:num(m[1]),warehouse:num(m[2])}:null;
   }
 
-  function parseAdjust(note){
+  function parseAdjustAfter(note,quantity){
     const s=String(note||'');
     const loc=parseLocation(s);
-    const m=s.match(/调整前\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
-    return loc&&m?{location:loc,before:num(m[1])}:null;
+    const m=s.match(/调整后\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    return loc?{location:loc,after:m?num(m[1]):num(quantity)}:null;
   }
 
   function snapshotForItem(item,cutoff){
-    let fridge=num(item.fridge_quantity),warehouse=num(item.warehouse_quantity),exists=true;
+    let fridge=0,warehouse=0,exists=false;
+    const cutoffMonth=String(cutoff||'').slice(0,7);
+    const parts=cutoffMonth.split('-');
+    const monthlyMarker=parts.length===2?(Number(parts[0])+'年'+Number(parts[1])+'月月底盘点'):'';
+
     const logs=allInventoryLogs
-      .filter(r=>String(r.item_id||'')===String(item.id)&&dateOf(r)>cutoff)
-      .sort((a,b)=>String(dateOf(b)).localeCompare(String(dateOf(a)))||String(b.created_at||'').localeCompare(String(a.created_at||''))||Number(b.id||0)-Number(a.id||0));
+      .filter(r=>{
+        if(String(r.item_id||'')!==String(item.id))return false;
+        if(dateOf(r)>cutoff)return false;
+        if(String(r.action||'')==='ADJUST'&&monthlyMarker&&String(r.note||'').includes(monthlyMarker))return false;
+        return true;
+      })
+      .sort((a,b)=>String(dateOf(a)).localeCompare(String(dateOf(b)))||String(a.created_at||'').localeCompare(String(b.created_at||''))||Number(a.id||0)-Number(b.id||0));
 
     for(const r of logs){
       const action=String(r.action||''),q=num(r.quantity),note=String(r.note||''),loc=parseLocation(note);
+
+      if(action==='CREATE'){
+        const p=parsePair(note,false);
+        fridge=p?p.fridge:0;
+        warehouse=p?p.warehouse:0;
+        exists=true;
+        continue;
+      }
+      if(!exists)continue;
+
       if(action==='IN'||action==='RETURN'){
-        if(loc==='fridge')fridge-=q;
-        else if(loc==='warehouse')warehouse-=q;
-      }else if(action==='OUT'||action==='BORROW'){
         if(loc==='fridge')fridge+=q;
         else if(loc==='warehouse')warehouse+=q;
+      }else if(action==='OUT'||action==='BORROW'){
+        if(loc==='fridge')fridge-=q;
+        else if(loc==='warehouse')warehouse-=q;
       }else if(action==='TRANSFER'){
-        if(note.includes('仓库 → 冰箱')){fridge-=q;warehouse+=q;}
-        else if(note.includes('冰箱 → 仓库')){fridge+=q;warehouse-=q;}
+        if(note.includes('仓库 → 冰箱')){warehouse-=q;fridge+=q;}
+        else if(note.includes('冰箱 → 仓库')){fridge-=q;warehouse+=q;}
       }else if(action==='ADJUST'){
-        const p=parseAdjust(note);
-        if(p?.location==='fridge')fridge=p.before;
-        else if(p?.location==='warehouse')warehouse=p.before;
+        const p=parseAdjustAfter(note,q);
+        if(p?.location==='fridge')fridge=p.after;
+        else if(p?.location==='warehouse')warehouse=p.after;
       }else if(action==='EDIT'){
-        const p=parseEdit(note);
+        const p=parsePair(note,true);
         if(p){fridge=p.fridge;warehouse=p.warehouse;}
-      }else if(action==='CREATE'){
-        fridge=0;warehouse=0;exists=false;
       }
     }
-
-    // 有 cutoff 当天或更早的 CREATE，就表示当月底已经存在。
-    const hadCreate=allInventoryLogs.some(r=>String(r.item_id||'')===String(item.id)&&String(r.action||'')==='CREATE'&&dateOf(r)<=cutoff);
-    const futureCreate=allInventoryLogs.some(r=>String(r.item_id||'')===String(item.id)&&String(r.action||'')==='CREATE'&&dateOf(r)>cutoff);
-    if(futureCreate&&!hadCreate)exists=false;
 
     return {exists,fridge:clean(fridge),warehouse:clean(warehouse)};
   }
@@ -314,14 +330,17 @@
     const cutoff=monthEnd(selectedMonth);
     const existingRes=await retry(()=>sb.from('monthly_stocktake_records').select('*').eq('month_key',selectedMonth));
     const existing=existingRes.data||[];
-    const existingIds=new Set(existing.map(r=>String(r.item_id)));
+    const existingByItem=new Map(existing.map(r=>[String(r.item_id),r]));
 
-    const missing=[];
+    const rows=[];
     for(const item of items){
-      if(existingIds.has(String(item.id)))continue;
+      const old=existingByItem.get(String(item.id));
+      if(old&&old.actual_fridge!=null&&old.actual_warehouse!=null)continue;
+
       const snap=snapshotForItem(item,cutoff);
       if(!snap.exists)continue;
-      missing.push({
+
+      rows.push({
         month_key:selectedMonth,
         cutoff_date:cutoff,
         item_id:item.id,
@@ -333,12 +352,12 @@
         system_warehouse:snap.warehouse,
         applied_fridge:snap.fridge,
         applied_warehouse:snap.warehouse,
-        created_by:user()
+        created_by:old?.created_by||user()
       });
     }
 
-    if(missing.length){
-      const {error}=await sb.from('monthly_stocktake_records').upsert(missing,{onConflict:'month_key,item_id',ignoreDuplicates:true});
+    if(rows.length){
+      const {error}=await sb.from('monthly_stocktake_records').upsert(rows,{onConflict:'month_key,item_id'});
       if(error)throw error;
     }
   }
