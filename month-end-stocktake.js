@@ -270,10 +270,13 @@
   }
 
   function availableMonths(){
-    const months=new Set([previousMonth()]);
+    const firstCompleteMonth='2026-09';
+    const months=new Set();
+    const prev=previousMonth();
+    if(prev>=firstCompleteMonth)months.add(prev);
     allInventoryLogs.forEach(r=>{
       const m=String(dateOf(r)||'').slice(0,7);
-      if(/^\d{4}-\d{2}$/.test(m)&&m<currentMonth())months.add(m);
+      if(/^\d{4}-\d{2}$/.test(m)&&m>=firstCompleteMonth&&m<currentMonth())months.add(m);
     });
     return [...months].sort((a,b)=>b.localeCompare(a));
   }
