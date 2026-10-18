@@ -689,7 +689,7 @@
 
     if(isCurrent){
       body.innerHTML=rows.map(r=>`<tr>
-        <td><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
+        <td class="recon-name-cell" title="${h(r.item.name)}"><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
         <td>${h(r.item.category||'-')}</td>
         <td>${clean(r.opening)}</td>
         <td>-</td><td>-</td><td>-</td><td>-</td>
@@ -714,7 +714,7 @@
       const input=r.posValue===null?'':clean(r.posValue);
       const alert=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001;
       return `<tr class="${alert?'recon-alert-row':''}">
-        <td><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
+        <td class="recon-name-cell" title="${h(r.item.name)}"><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
         <td>${h(r.item.category||'-')}</td>
         <td>${clean(r.opening)}</td>
         <td>${clean(r.closing)}</td>
@@ -1096,7 +1096,7 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-resize-bubble{position:absolute;z-index:26;pointer-events:none;background:#17324d;color:#fff;border-radius:7px;padding:4px 7px;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 .recon-table-head{position:relative;min-height:32px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}
 .recon-table-meta{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0}.recon-table-meta .hint{margin-top:0;white-space:nowrap}
-.recon-table-wrap{position:relative;max-height:64vh;overflow:auto}.recon-table{min-width:100%}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap;overflow:visible;text-overflow:clip}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
+.recon-table-wrap{position:relative;max-height:64vh;overflow:auto}.recon-table{min-width:100%}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap;overflow:visible;text-overflow:clip}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
 @media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}}
 @media(max-width:620px){.recon-summary{grid-template-columns:1fr 1fr}.recon-control-actions{display:grid;grid-template-columns:1fr 1fr}.recon-control-actions button{width:100%}.recon-guide{display:block}.recon-guide b{display:block;margin-bottom:4px}}
 `;document.head.appendChild(s);
