@@ -41,7 +41,15 @@ for insert
 to authenticated
 with check (public.is_app_active());
 
-grant select, insert on public.monthly_stocktake_records to authenticated;
+drop policy if exists monthly_stocktake_records_update on public.monthly_stocktake_records;
+create policy monthly_stocktake_records_update
+on public.monthly_stocktake_records
+for update
+to authenticated
+using (public.is_app_active())
+with check (public.is_app_active());
+
+grant select, insert, update on public.monthly_stocktake_records to authenticated;
 grant usage, select on sequence public.monthly_stocktake_records_id_seq to authenticated;
 
 create or replace function public.save_monthly_stocktake_result(
