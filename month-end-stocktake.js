@@ -90,6 +90,9 @@
 
       <div class="stocktake-summary">
         <div class="card"><small>月末品项</small><b id="stocktakeTotalItems">0</b></div>
+        <div class="card"><small>系统冰箱总数</small><b id="stocktakeSystemFridgeTotal">0</b></div>
+        <div class="card"><small>系统仓库总数</small><b id="stocktakeSystemWarehouseTotal">0</b></div>
+        <div class="card"><small>系统库存总数</small><b id="stocktakeSystemGrandTotal">0</b></div>
         <div class="card"><small>已调整品项</small><b id="stocktakeAdjustedItems">0</b></div>
         <div class="card"><small>调整增加</small><b id="stocktakeIncrease">0</b></div>
         <div class="card"><small>调整减少</small><b id="stocktakeDecrease">0</b></div>
@@ -388,7 +391,14 @@
       const d=recordDiff(r);return s+(d&&d<0?Math.abs(d):0);
     },0));
 
+    const systemFridgeTotal=clean(monthRecords.reduce((s,r)=>s+num(r.system_fridge),0));
+    const systemWarehouseTotal=clean(monthRecords.reduce((s,r)=>s+num(r.system_warehouse),0));
+    const systemGrandTotal=clean(systemFridgeTotal+systemWarehouseTotal);
+
     document.getElementById('stocktakeTotalItems').textContent=total;
+    document.getElementById('stocktakeSystemFridgeTotal').textContent=systemFridgeTotal;
+    document.getElementById('stocktakeSystemWarehouseTotal').textContent=systemWarehouseTotal;
+    document.getElementById('stocktakeSystemGrandTotal').textContent=systemGrandTotal;
     document.getElementById('stocktakeAdjustedItems').textContent=adjustedRows.length;
     document.getElementById('stocktakeIncrease').textContent=increase;
     document.getElementById('stocktakeDecrease').textContent=decrease;
@@ -621,7 +631,7 @@
 #stocktakeMonth{min-width:180px}.stocktake-toolbar input{min-width:300px;min-height:42px}.stocktake-toolbar select{min-height:42px}
 .stocktake-toolbar-actions button{min-height:42px}
 .stocktake-info{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#fff8e8;color:#7b5b16;font-size:13px;line-height:1.6}.stocktake-info b{white-space:nowrap}
-.stocktake-summary{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:12px}.stocktake-summary .card{padding:13px 14px}.stocktake-summary small{display:block;color:#667085}.stocktake-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
+.stocktake-summary{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:10px;margin-bottom:12px}.stocktake-summary .card{padding:13px 14px}.stocktake-summary small{display:block;color:#667085}.stocktake-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
 .stocktake-card{padding:14px}.stocktake-month-head{align-items:flex-start}.stocktake-card .section-head h3{margin:0;font-size:17px}
 .stocktake-table-wrap{max-height:62vh;overflow:auto}.stocktake-table{min-width:960px}.stocktake-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
 .stocktake-table th:nth-child(n+4),.stocktake-table td:nth-child(n+4){text-align:center}
@@ -634,6 +644,7 @@
 .stocktake-ok{color:#087f5b;font-weight:700}.stocktake-bad{color:#c92a2a;font-weight:700}.stocktake-warn{color:#b7791f;font-weight:700}.stocktake-muted{color:#98a2b3}
 .stocktake-status-pending{color:#667085}.stocktake-status-ok{background:#edf9f4!important;color:#087f5b!important}.stocktake-status-adjusted{background:#fff4df!important;color:#9a6a1f!important}
 .stocktake-history-card{margin-top:12px}.stocktake-history-wrap{max-height:42vh;overflow:auto}.stocktake-history-table{min-width:980px}.stocktake-history-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
+@media(max-width:1250px){.stocktake-summary{grid-template-columns:repeat(4,minmax(150px,1fr))}}
 @media(max-width:900px){.stocktake-summary{grid-template-columns:repeat(2,1fr)}.stocktake-toolbar{align-items:stretch;flex-direction:column}.stocktake-toolbar-left{width:100%}.stocktake-toolbar-left label{flex:1}.stocktake-toolbar input,#stocktakeMonth{width:100%;min-width:0}}
 @media(max-width:620px){.stocktake-info{display:block}.stocktake-info b{display:block;margin-bottom:4px}.monthly-stocktake-system{grid-template-columns:1fr 1fr}.monthly-stocktake-system>div:last-child{grid-column:1/-1}}
 `;
