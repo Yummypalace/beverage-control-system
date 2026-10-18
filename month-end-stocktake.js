@@ -177,24 +177,32 @@
     };
   }
 
-  async function fetchStocktakeHistory(){
-    const all=[];let from=0;const size=1000;
-    while(true){
-      const {data,error}=await sb.from('inventory_logs')
-        .select('*')
-        .eq('action','ADJUST')
-        .order('operation_date',{ascending:false})
-        .order('created_at',{ascending:false})
-        .range(from,from+size-1);
-      if(error)throw error;
-      const page=data||[];
-      all.push(...page);
-      if(page.length<size)break;
-      from+=size;
+  async function fetchStocktakeHistory(attempt=0){
+    try{
+      const all=[];let from=0;const size=1000;
+      while(true){
+        const {data,error}=await sb.from('inventory_logs')
+          .select('*')
+          .eq('action','ADJUST')
+          .order('operation_date',{ascending:false})
+          .order('created_at',{ascending:false})
+          .range(from,from+size-1);
+        if(error)throw error;
+        const page=data||[];
+        all.push(...page);
+        if(page.length<size)break;
+        from+=size;
+      }
+      stocktakeHistory=all.filter(r=>!r.correction_ref).map(r=>({...r,_date:dateOf(r),_parsed:parseStocktakeLog(r)}));
+      populateStocktakeHistoryMonths();
+      renderStocktakeHistory();
+    }catch(e){
+      if(attempt<2){
+        await new Promise(r=>setTimeout(r,220*(attempt+1)));
+        return fetchStocktakeHistory(attempt+1);
+      }
+      throw e;
     }
-    stocktakeHistory=all.filter(r=>!r.correction_ref).map(r=>({...r,_date:dateOf(r),_parsed:parseStocktakeLog(r)}));
-    populateStocktakeHistoryMonths();
-    renderStocktakeHistory();
   }
 
   function populateStocktakeHistoryMonths(){
@@ -243,12 +251,14 @@
     if(btn){btn.disabled=true;btn.textContent='刷新中...';}
     if(status)status.textContent='读取中...';
     try{
-      await Promise.all([loadAll(),fetchStocktakeHistory()]);
+      const results=await Promise.allSettled([loadAll(),fetchStocktakeHistory()]);
       renderTable();
-      if(status)status.textContent='已更新';
+      const historyFailed=results[1]?.status==='rejected';
+      if(status)status.textContent=historyFailed?'库存已更新；盘点记录读取失败，已保留现有资料':'已更新';
+      if(historyFailed)console.warn('盘点记录读取失败，保留现有资料',results[1].reason);
     }catch(e){
       if(status)status.textContent='刷新失败';
-      alert('库存刷新失败：'+String(e?.message||e));
+      console.warn('盘点页面刷新失败',e);
     }finally{
       if(btn){btn.disabled=false;btn.textContent='刷新库存';}
     }
