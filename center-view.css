@@ -64,3 +64,51 @@
   .drawer .detail-grid{grid-template-columns:1fr;}
   .drawer-actions button{flex:1;min-width:110px;}
 }
+
+
+/* 工作台统计卡片：6 个指标铺满整行、等宽、文字与数字居中。 */
+#dashboard .stats{
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:16px;
+  width:100%;
+  margin-bottom:18px;
+}
+#dashboard .stat{
+  min-height:150px;
+  padding:22px 16px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  border-radius:18px;
+}
+#dashboard .stat small{
+  display:block;
+  margin:0 0 12px;
+  font-size:16px;
+  line-height:1.35;
+  color:#667085;
+  white-space:nowrap;
+}
+#dashboard .stat b{
+  display:block;
+  margin:0;
+  font-size:30px;
+  line-height:1.15;
+  font-weight:800;
+  letter-spacing:.01em;
+}
+#dashboard .stat #statCommission{
+  color:#b7791f;
+}
+
+@media(max-width:1250px){
+  #dashboard .stats{grid-template-columns:repeat(3,minmax(0,1fr));}
+}
+@media(max-width:720px){
+  #dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  #dashboard .stat{min-height:122px;padding:16px 10px;}
+  #dashboard .stat small{font-size:14px;margin-bottom:8px;}
+  #dashboard .stat b{font-size:25px;}
+}
