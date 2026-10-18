@@ -69,6 +69,7 @@ declare
   email text := coalesce(auth.jwt()->>'email','');
   note_text text := trim(coalesce(p_note,''));
   month_text text;
+  is_restored boolean;
 begin
   if not public.is_app_active() then raise exception '此账号已停用'; end if;
   if p_month_key is null or p_month_key !~ '^[0-9]{4}-[0-9]{2}$' then raise exception '盘点月份不正确'; end if;
@@ -108,22 +109,55 @@ begin
   where id=i.id;
 
   month_text := extract(year from r.cutoff_date)::int || '年' || extract(month from r.cutoff_date)::int || '月月底盘点';
+  is_restored := p_actual_fridge = r.system_fridge and p_actual_warehouse = r.system_warehouse;
 
-  if delta_f <> 0 then
+  -- 月度盘点明细只保留“目前有效的最终调整”。
+  -- 用户如果后来发现之前盘错了并改回系统月末数量，旧调整记录会一起清掉。
+  delete from public.inventory_logs
+  where item_id=i.id
+    and action='ADJUST'
+    and operation_date=r.cutoff_date
+    and note like '%｜' || month_text || '%';
+
+  if is_restored then
+    update public.monthly_stocktake_records
+    set actual_fridge=null,
+        actual_warehouse=null,
+        applied_fridge=r.system_fridge,
+        applied_warehouse=r.system_warehouse,
+        note=null,
+        checked_at=null,
+        checked_by=null
+    where id=r.id;
+
+    return jsonb_build_object(
+      'ok',true,
+      'cleared',true,
+      'month_key',p_month_key,
+      'item_id',p_item,
+      'delta_fridge',delta_f,
+      'delta_warehouse',delta_w,
+      'current_fridge',next_f,
+      'current_warehouse',next_w
+    );
+  end if;
+
+  -- 重新写成“月末系统数量 → 最终确认数量”，避免历史中留下反复修改的多笔记录。
+  if p_actual_fridge <> r.system_fridge then
     insert into public.inventory_logs(item_id,item_name,action,quantity,note,user_email,operation_date,out_type)
     values(
       i.id,i.name,'ADJUST',p_actual_fridge,
-      '冰箱｜盘点调整｜调整前 '||before_f||'｜调整后 '||p_actual_fridge||'｜'||month_text||
+      '冰箱｜盘点调整｜调整前 '||r.system_fridge||'｜调整后 '||p_actual_fridge||'｜'||month_text||
         case when note_text<>'' then '｜'||note_text else '' end,
       email,r.cutoff_date,null
     );
   end if;
 
-  if delta_w <> 0 then
+  if p_actual_warehouse <> r.system_warehouse then
     insert into public.inventory_logs(item_id,item_name,action,quantity,note,user_email,operation_date,out_type)
     values(
       i.id,i.name,'ADJUST',p_actual_warehouse,
-      '仓库｜盘点调整｜调整前 '||before_w||'｜调整后 '||p_actual_warehouse||'｜'||month_text||
+      '仓库｜盘点调整｜调整前 '||r.system_warehouse||'｜调整后 '||p_actual_warehouse||'｜'||month_text||
         case when note_text<>'' then '｜'||note_text else '' end,
       email,r.cutoff_date,null
     );
@@ -141,6 +175,7 @@ begin
 
   return jsonb_build_object(
     'ok',true,
+    'cleared',false,
     'month_key',p_month_key,
     'item_id',p_item,
     'system_fridge',r.system_fridge,
