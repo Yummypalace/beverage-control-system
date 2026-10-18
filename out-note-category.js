@@ -178,7 +178,7 @@
       }else if(!force)return;
       td.dataset.category=classifyRow(tr);
       const action=(tr.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
-      const edit=canEditOldOutType&&action==='OUT'?'<button class="out-note-category-edit secondary" style="margin-left:6px;padding:3px 7px;font-size:11px">修改</button>':'';
+      const edit=canEditOldOutType&&action==='OUT'?'<button class="out-note-category-edit secondary" style="margin-left:6px;padding:3px 7px;font-size:11px;color:#c92a2a">修改</button>':'';
       td.innerHTML=td.dataset.category?`<span class="out-note-category-pill">${td.dataset.category}</span>${edit}`:'';
       const btn=td.querySelector('.out-note-category-edit');
       if(btn)btn.onclick=()=>editOldOutType(tr);
