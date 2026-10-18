@@ -1,34 +1,36 @@
-// 盘点调整：独立页面。
-// 月底实际盘点与系统库存不一致时，在这里把当前冰箱/仓库库存调整为实际数量，并保留完整盘点记录。
+// 月度盘点调整：只处理已经结束的月份。
+// 每个已结束月份会建立一份“月末系统库存快照”；实际盘点完成后再录入实际数量。
+// 若有差异，系统按差额修正当前库存，并把调整记录记在该月最后一天。
 (function(){
   'use strict';
 
   let installed=false;
-  let activeItemId='';
-  let stocktakeHistory=[];
-  let stocktakeHistoryMonth='';
+  let selectedMonth='';
+  let allInventoryLogs=[];
+  let monthRecords=[];
+  let loading=false;
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function num(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
   function clean(v){return Number(num(v).toFixed(2));}
   function todaySG(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
   function currentMonth(){return todaySG().slice(0,7);}
-  function dateOf(r){return r.operation_date||new Date(r.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
-  function monthLabel(v){const [y,m]=String(v||'').split('-');return y&&m?`${y}年${Number(m)}月`:'';}
-  function parseStocktakeLog(r){
-    const parts=String(r?.note||'').split('｜').map(x=>String(x).trim());
-    let location='';
-    if(parts.length&&/^(冰箱|仓库)$/.test(parts[0]))location=parts.shift();
-    parts.splice(parts.indexOf('盘点调整'),parts.includes('盘点调整')?1:0);
-    const beforePart=parts.find(x=>/^调整前\s/.test(x))||'';
-    const afterPart=parts.find(x=>/^调整后\s/.test(x))||'';
-    const beforeMatch=beforePart.match(/^调整前\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
-    const afterMatch=afterPart.match(/^调整后\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
-    const before=beforeMatch?num(beforeMatch[1]):null;
-    const after=afterMatch?num(afterMatch[1]):num(r?.quantity);
-    const note=parts.filter(x=>x&&!/^调整前\s/.test(x)&&!/^调整后\s/.test(x)&&x!=='盘点调整').join('｜').trim();
-    return {location,before,after,note,diff:before===null?null:clean(after-before)};
+  function previousMonth(month=currentMonth()){
+    const [y,m]=String(month).split('-').map(Number);
+    return new Date(Date.UTC(y,m-2,1)).toISOString().slice(0,7);
   }
+  function monthEnd(month){
+    const [y,m]=String(month||'').split('-').map(Number);
+    if(!y||!m)return '';
+    return new Date(Date.UTC(y,m,0)).toISOString().slice(0,10);
+  }
+  function monthLabel(v){const [y,m]=String(v||'').split('-');return y&&m?`${y}年${Number(m)}月`:'';}
+  function dateOf(r){return r.operation_date||new Date(r.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
+  function recordDiff(r){
+    if(r.actual_fridge==null||r.actual_warehouse==null)return null;
+    return clean(num(r.actual_fridge)+num(r.actual_warehouse)-num(r.system_fridge)-num(r.system_warehouse));
+  }
+  function user(){return typeof userEmail==='function'?userEmail():'';}
 
   function wait(){
     if(typeof sb==='undefined'||typeof items==='undefined'||typeof loadAll!=='function'||typeof showPage!=='function'||!document.querySelector('.side-nav')||!document.querySelector('.content-area')){
@@ -39,11 +41,10 @@
 
   function install(){
     if(installed)return;installed=true;
+    selectedMonth=previousMonth();
     buildPage();
-    buildDialog();
     extendNavigation();
     addStyle();
-    renderTable();
   }
 
   function buildPage(){
@@ -58,30 +59,43 @@
       <div class="stocktake-page-head">
         <div>
           <h2>盘点调整</h2>
-          <div class="hint">月底完成实际库存盘点后，如果系统数量与实际数量不一致，可在这里调整。调整后会直接更新库存并留下盘点记录。</div>
+          <div class="hint">按月份进行盘点。月份结束后会保留一份月末系统库存记录；实际盘点完成后，再录入实际数量并调整差异。</div>
         </div>
         <span id="stocktakePageStatus"></span>
       </div>
 
       <div class="card stocktake-toolbar">
-        <div>
+        <div class="stocktake-toolbar-left">
+          <label>盘点月份
+            <select id="stocktakeMonth"></select>
+          </label>
           <label>搜索饮料
             <input id="stocktakeSearch" placeholder="名称 / 类别 / 规格">
           </label>
         </div>
         <div class="stocktake-toolbar-actions">
-          <button id="stocktakeRefresh" class="secondary">刷新库存</button>
+          <button id="stocktakeRefresh" class="secondary">刷新</button>
         </div>
       </div>
 
       <div class="card stocktake-info">
         <b>使用方式：</b>
-        <span>先完成实际盘点，再点击对应饮料的“盘点调整”，输入实际冰箱库存与实际仓库库存。系统只会调整有差异的位置；POS 销量不会改变。</span>
+        <span id="stocktakeInfoText">月底营业结束后，先完成实际盘点，再把实际冰箱和仓库数量录入这里。系统会按差额修正库存，不会把今天库存直接覆盖成上个月的数量。</span>
+      </div>
+
+      <div class="stocktake-summary">
+        <div class="card"><small>盘点品项</small><b id="stocktakeTotalItems">0</b></div>
+        <div class="card"><small>待盘点</small><b id="stocktakePending">0</b></div>
+        <div class="card"><small>已核对</small><b id="stocktakeChecked">0</b></div>
+        <div class="card"><small>有差异</small><b id="stocktakeDifferent">0</b></div>
       </div>
 
       <div class="card stocktake-card">
-        <div class="section-head">
-          <h3>当前库存</h3>
+        <div class="section-head stocktake-month-head">
+          <div>
+            <h3 id="stocktakeMonthTitle">月末盘点表</h3>
+            <div id="stocktakeCutoffHint" class="hint"></div>
+          </div>
           <span id="stocktakeCount" class="hint"></span>
         </div>
         <div class="tablewrap stocktake-table-wrap">
@@ -90,64 +104,51 @@
               <tr>
                 <th>名称</th>
                 <th>类别</th>
-                <th>规格</th>
                 <th>单位</th>
-                <th>冰箱库存</th>
-                <th>仓库库存</th>
-                <th>总库存</th>
+                <th>系统冰箱</th>
+                <th>系统仓库</th>
+                <th>系统总库存</th>
+                <th>实际冰箱</th>
+                <th>实际仓库</th>
+                <th>盘点差异</th>
+                <th>状态</th>
                 <th>操作</th>
               </tr>
             </thead>
-            <tbody id="stocktakeBody"><tr><td colspan="8">读取中...</td></tr></tbody>
+            <tbody id="stocktakeBody"><tr><td colspan="11">读取中...</td></tr></tbody>
           </table>
         </div>
       </div>
 
       <div class="card stocktake-card stocktake-history-card">
-        <div class="section-head stocktake-history-head">
+        <div class="section-head">
           <div>
-            <h3>盘点调整记录</h3>
-            <div class="hint">盘点备注只在这里显示，不会混入「出入库备注」。</div>
+            <h3>本月调整明细</h3>
+            <div class="hint">这里只显示实际盘点后产生库存差异的调整记录；完整盘点结果以上方月末盘点表为准。</div>
           </div>
-          <div class="stocktake-history-controls">
-            <label>月份
-              <select id="stocktakeHistoryMonth"></select>
-            </label>
-            <span id="stocktakeHistoryCount" class="hint"></span>
-          </div>
+          <span id="stocktakeHistoryCount" class="hint"></span>
         </div>
         <div class="tablewrap stocktake-history-wrap">
           <table class="stocktake-history-table">
             <thead>
-              <tr>
-                <th>日期</th>
-                <th>饮料</th>
-                <th>位置</th>
-                <th>调整前</th>
-                <th>调整后</th>
-                <th>差异</th>
-                <th>备注</th>
-                <th>操作人</th>
-              </tr>
+              <tr><th>日期</th><th>饮料</th><th>位置</th><th>调整前</th><th>调整后</th><th>差异</th><th>备注</th><th>操作人</th></tr>
             </thead>
-            <tbody id="stocktakeHistoryBody"><tr><td colspan="8">读取中...</td></tr></tbody>
+            <tbody id="stocktakeHistoryBody"><tr><td colspan="8">暂无调整记录</td></tr></tbody>
           </table>
         </div>
       </div>`;
     content.appendChild(section);
 
-    document.getElementById('stocktakeSearch').addEventListener('input',renderTable);
-    document.getElementById('stocktakeRefresh').onclick=refreshPage;
-    document.getElementById('stocktakeHistoryMonth').onchange=()=>{
-      stocktakeHistoryMonth=document.getElementById('stocktakeHistoryMonth').value||'';
-      renderStocktakeHistory();
+    document.getElementById('stocktakeMonth').onchange=async()=>{
+      selectedMonth=document.getElementById('stocktakeMonth').value||previousMonth();
+      await loadSelectedMonth();
     };
+    document.getElementById('stocktakeSearch').oninput=renderTable;
+    document.getElementById('stocktakeRefresh').onclick=refreshPage;
   }
 
   function extendNavigation(){
-    const nav=document.querySelector('.side-nav');
-    if(!nav)return;
-
+    const nav=document.querySelector('.side-nav');if(!nav)return;
     let a=nav.querySelector('a[href="#stocktakeAdjust"]');
     if(!a){
       a=document.createElement('a');
@@ -177,350 +178,365 @@
     };
   }
 
-  async function fetchStocktakeHistory(attempt=0){
+  async function retry(task,attempts=3){
+    let lastErr=null;
+    for(let i=0;i<attempts;i++){
+      try{
+        const result=await task();
+        if(!result?.error)return result;
+        lastErr=result.error;
+      }catch(e){lastErr=e;}
+      if(i<attempts-1)await new Promise(r=>setTimeout(r,220*(i+1)));
+    }
+    throw lastErr||new Error('读取失败');
+  }
+
+  async function fetchAllInventoryLogs(attempt=0){
     try{
       const all=[];let from=0;const size=1000;
       while(true){
-        const {data,error}=await sb.from('inventory_logs')
-          .select('*')
-          .eq('action','ADJUST')
-          .order('operation_date',{ascending:false})
-          .order('created_at',{ascending:false})
+        const {data,error}=await sb.from('inventory_logs').select('*')
+          .order('operation_date',{ascending:true})
+          .order('created_at',{ascending:true})
           .range(from,from+size-1);
         if(error)throw error;
-        const page=data||[];
-        all.push(...page);
+        const page=data||[];all.push(...page);
         if(page.length<size)break;
         from+=size;
       }
-      stocktakeHistory=all.filter(r=>!r.correction_ref).map(r=>({...r,_date:dateOf(r),_parsed:parseStocktakeLog(r)}));
-      populateStocktakeHistoryMonths();
-      renderStocktakeHistory();
+      return all;
     }catch(e){
       if(attempt<2){
         await new Promise(r=>setTimeout(r,220*(attempt+1)));
-        return fetchStocktakeHistory(attempt+1);
+        return fetchAllInventoryLogs(attempt+1);
       }
       throw e;
     }
   }
 
-  function populateStocktakeHistoryMonths(){
-    const sel=document.getElementById('stocktakeHistoryMonth');if(!sel)return;
-    const previous=stocktakeHistoryMonth||currentMonth();
-    const months=new Set([currentMonth()]);
-    stocktakeHistory.forEach(r=>{const m=String(r._date||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(m))months.add(m);});
-    const list=[...months].sort((a,b)=>b.localeCompare(a));
-    sel.innerHTML='<option value="">全部月份</option>'+list.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
-    stocktakeHistoryMonth=list.includes(previous)?previous:(stocktakeHistoryMonth===''?'':currentMonth());
-    sel.value=stocktakeHistoryMonth;
+  function parseLocation(note){
+    const first=String(note||'').split('｜')[0].trim();
+    return first==='冰箱'?'fridge':first==='仓库'?'warehouse':'';
   }
 
-  function renderStocktakeHistory(){
-    const body=document.getElementById('stocktakeHistoryBody');
-    const count=document.getElementById('stocktakeHistoryCount');
-    if(!body)return;
-    const month=stocktakeHistoryMonth;
-    const rows=stocktakeHistory.filter(r=>!month||String(r._date||'').slice(0,7)===month);
-    if(count)count.textContent=`记录 ${rows.length}`;
+  function parseEdit(note){
+    const s=String(note||'');
+    const m=s.match(/调整前\s*冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    return m?{fridge:num(m[1]),warehouse:num(m[2])}:null;
+  }
 
-    body.innerHTML=rows.map(r=>{
-      const p=r._parsed||parseStocktakeLog(r);
-      let diff='<span class="stocktake-muted">—</span>';
-      if(p.diff!==null){
-        if(Math.abs(p.diff)<0.000001)diff='<span class="stocktake-ok">0</span>';
-        else if(p.diff<0)diff=`<span class="stocktake-bad">${p.diff}</span>`;
-        else diff=`<span class="stocktake-warn">+${p.diff}</span>`;
+  function parseAdjust(note){
+    const s=String(note||'');
+    const loc=parseLocation(s);
+    const m=s.match(/调整前\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    return loc&&m?{location:loc,before:num(m[1])}:null;
+  }
+
+  function snapshotForItem(item,cutoff){
+    let fridge=num(item.fridge_quantity),warehouse=num(item.warehouse_quantity),exists=true;
+    const logs=allInventoryLogs
+      .filter(r=>String(r.item_id||'')===String(item.id)&&dateOf(r)>cutoff)
+      .sort((a,b)=>String(dateOf(b)).localeCompare(String(dateOf(a)))||String(b.created_at||'').localeCompare(String(a.created_at||''))||Number(b.id||0)-Number(a.id||0));
+
+    for(const r of logs){
+      const action=String(r.action||''),q=num(r.quantity),note=String(r.note||''),loc=parseLocation(note);
+      if(action==='IN'||action==='RETURN'){
+        if(loc==='fridge')fridge-=q;
+        else if(loc==='warehouse')warehouse-=q;
+      }else if(action==='OUT'||action==='BORROW'){
+        if(loc==='fridge')fridge+=q;
+        else if(loc==='warehouse')warehouse+=q;
+      }else if(action==='TRANSFER'){
+        if(note.includes('仓库 → 冰箱')){fridge-=q;warehouse+=q;}
+        else if(note.includes('冰箱 → 仓库')){fridge+=q;warehouse-=q;}
+      }else if(action==='ADJUST'){
+        const p=parseAdjust(note);
+        if(p?.location==='fridge')fridge=p.before;
+        else if(p?.location==='warehouse')warehouse=p.before;
+      }else if(action==='EDIT'){
+        const p=parseEdit(note);
+        if(p){fridge=p.fridge;warehouse=p.warehouse;}
+      }else if(action==='CREATE'){
+        fridge=0;warehouse=0;exists=false;
       }
-      return `<tr>
-        <td>${h(r._date||'')}</td>
-        <td><b>${h(r.item_name||'')}</b></td>
-        <td>${h(p.location||'-')}</td>
-        <td>${p.before===null?'-':clean(p.before)}</td>
-        <td><b>${clean(p.after)}</b></td>
-        <td>${diff}</td>
-        <td>${h(p.note||'')}</td>
-        <td>${h(r.user_email||'')}</td>
-      </tr>`;
-    }).join('')||'<tr><td colspan="8">这个月份没有盘点调整记录</td></tr>';
+    }
+
+    // 有 cutoff 当天或更早的 CREATE，就表示当月底已经存在。
+    const hadCreate=allInventoryLogs.some(r=>String(r.item_id||'')===String(item.id)&&String(r.action||'')==='CREATE'&&dateOf(r)<=cutoff);
+    const futureCreate=allInventoryLogs.some(r=>String(r.item_id||'')===String(item.id)&&String(r.action||'')==='CREATE'&&dateOf(r)>cutoff);
+    if(futureCreate&&!hadCreate)exists=false;
+
+    return {exists,fridge:clean(fridge),warehouse:clean(warehouse)};
+  }
+
+  function availableMonths(){
+    const months=new Set([previousMonth()]);
+    allInventoryLogs.forEach(r=>{
+      const m=String(dateOf(r)||'').slice(0,7);
+      if(/^\d{4}-\d{2}$/.test(m)&&m<currentMonth())months.add(m);
+    });
+    return [...months].sort((a,b)=>b.localeCompare(a));
+  }
+
+  function populateMonths(){
+    const sel=document.getElementById('stocktakeMonth');if(!sel)return;
+    const list=availableMonths();
+    if(!selectedMonth||!list.includes(selectedMonth))selectedMonth=list[0]||previousMonth();
+    sel.innerHTML=list.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
+    sel.value=selectedMonth;
+  }
+
+  async function ensureMonthSnapshot(){
+    const cutoff=monthEnd(selectedMonth);
+    const existingRes=await retry(()=>sb.from('monthly_stocktake_records').select('*').eq('month_key',selectedMonth));
+    const existing=existingRes.data||[];
+    const existingIds=new Set(existing.map(r=>String(r.item_id)));
+
+    const missing=[];
+    for(const item of items){
+      if(existingIds.has(String(item.id)))continue;
+      const snap=snapshotForItem(item,cutoff);
+      if(!snap.exists)continue;
+      missing.push({
+        month_key:selectedMonth,
+        cutoff_date:cutoff,
+        item_id:item.id,
+        item_name:item.name||'',
+        category:item.category||'',
+        spec:item.spec||'',
+        unit:item.unit||'',
+        system_fridge:snap.fridge,
+        system_warehouse:snap.warehouse,
+        applied_fridge:snap.fridge,
+        applied_warehouse:snap.warehouse,
+        created_by:user()
+      });
+    }
+
+    if(missing.length){
+      const {error}=await sb.from('monthly_stocktake_records').upsert(missing,{onConflict:'month_key,item_id',ignoreDuplicates:true});
+      if(error)throw error;
+    }
+  }
+
+  async function fetchMonthRecords(){
+    const res=await retry(()=>sb.from('monthly_stocktake_records').select('*').eq('month_key',selectedMonth).order('item_name',{ascending:true}));
+    monthRecords=res.data||[];
+  }
+
+  async function loadSelectedMonth(){
+    const status=document.getElementById('stocktakePageStatus');
+    if(status)status.textContent='读取中...';
+    try{
+      await ensureMonthSnapshot();
+      await fetchMonthRecords();
+      renderTable();
+      renderHistory();
+      if(status)status.textContent='已更新';
+    }catch(e){
+      console.warn('月度盘点读取失败',e);
+      if(status)status.textContent='读取失败';
+      if(!monthRecords.length){
+        const body=document.getElementById('stocktakeBody');
+        if(body)body.innerHTML=`<tr><td colspan="11">读取失败：${h(e?.message||e)}</td></tr>`;
+      }
+    }
   }
 
   async function refreshPage(){
+    if(loading)return;
+    loading=true;
     const btn=document.getElementById('stocktakeRefresh');
     const status=document.getElementById('stocktakePageStatus');
     if(btn){btn.disabled=true;btn.textContent='刷新中...';}
     if(status)status.textContent='读取中...';
     try{
-      const results=await Promise.allSettled([loadAll(),fetchStocktakeHistory()]);
-      renderTable();
-      const historyFailed=results[1]?.status==='rejected';
-      if(status)status.textContent=historyFailed?'库存已更新；盘点记录读取失败，已保留现有资料':'已更新';
-      if(historyFailed)console.warn('盘点记录读取失败，保留现有资料',results[1].reason);
+      await loadAll();
+      allInventoryLogs=await fetchAllInventoryLogs();
+      populateMonths();
+      await loadSelectedMonth();
     }catch(e){
-      if(status)status.textContent='刷新失败';
       console.warn('盘点页面刷新失败',e);
+      if(status)status.textContent='刷新失败';
     }finally{
-      if(btn){btn.disabled=false;btn.textContent='刷新库存';}
+      loading=false;
+      if(btn){btn.disabled=false;btn.textContent='刷新';}
     }
   }
 
-  function filteredItems(){
+  function filteredRecords(){
     const kw=(document.getElementById('stocktakeSearch')?.value||'').trim().toLowerCase();
-    return [...items]
-      .filter(x=>!kw||[x.name,x.category,x.spec,x.unit].join(' ').toLowerCase().includes(kw))
-      .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'zh-CN',{numeric:true,sensitivity:'base'}));
+    return monthRecords.filter(r=>!kw||[r.item_name,r.category,r.spec,r.unit].join(' ').toLowerCase().includes(kw));
   }
 
   function renderTable(){
-    const body=document.getElementById('stocktakeBody');
-    const count=document.getElementById('stocktakeCount');
-    if(!body)return;
+    const body=document.getElementById('stocktakeBody');if(!body)return;
+    const rows=filteredRecords();
 
-    const rows=filteredItems();
-    if(count)count.textContent=`显示 ${rows.length} 项`;
+    const total=monthRecords.length;
+    const pending=monthRecords.filter(r=>r.actual_fridge==null||r.actual_warehouse==null).length;
+    const checked=total-pending;
+    const different=monthRecords.filter(r=>{
+      const d=recordDiff(r);return d!==null&&Math.abs(d)>0.000001;
+    }).length;
 
-    body.innerHTML=rows.map(x=>{
-      const f=clean(x.fridge_quantity),w=clean(x.warehouse_quantity),total=clean(f+w);
-      return `<tr>
-        <td><b>${h(x.name||'')}</b></td>
-        <td>${h(x.category||'-')}</td>
-        <td>${h(x.spec||'-')}</td>
-        <td>${h(x.unit||'')}</td>
-        <td>${f}</td>
-        <td>${w}</td>
-        <td><b>${total}</b></td>
-        <td><button class="stocktake-row-btn secondary" data-item-id="${h(x.id)}">盘点调整</button></td>
+    document.getElementById('stocktakeTotalItems').textContent=total;
+    document.getElementById('stocktakePending').textContent=pending;
+    document.getElementById('stocktakeChecked').textContent=checked;
+    document.getElementById('stocktakeDifferent').textContent=different;
+    document.getElementById('stocktakeCount').textContent=`显示 ${rows.length} 项`;
+    document.getElementById('stocktakeMonthTitle').textContent=`${monthLabel(selectedMonth)} 月末盘点表`;
+    document.getElementById('stocktakeCutoffHint').textContent=`月末记录截止 ${monthEnd(selectedMonth)} 营业结束`;
+
+    body.innerHTML=rows.map(r=>{
+      const checked=r.actual_fridge!=null&&r.actual_warehouse!=null;
+      const sf=clean(r.system_fridge),sw=clean(r.system_warehouse),st=clean(sf+sw);
+      const af=checked?clean(r.actual_fridge):'',aw=checked?clean(r.actual_warehouse):'';
+      const d=recordDiff(r);
+      let diff='<span class="stocktake-muted">待盘点</span>';
+      let status='<span class="pill stocktake-status-pending">待盘点</span>';
+      if(checked){
+        if(Math.abs(d)<0.000001){
+          diff='<span class="stocktake-ok">0</span>';
+          status='<span class="pill stocktake-status-ok">已核对</span>';
+        }else{
+          diff=`<span class="${d<0?'stocktake-bad':'stocktake-warn'}">${d>0?'+':''}${d}</span>`;
+          status='<span class="pill stocktake-status-adjusted">已调整</span>';
+        }
+      }
+      return `<tr data-stocktake-id="${h(r.id)}" data-item-id="${h(r.item_id)}">
+        <td><b>${h(r.item_name||'')}</b><div class="stocktake-sub">${h(r.spec||'')}</div></td>
+        <td>${h(r.category||'-')}</td>
+        <td>${h(r.unit||'')}</td>
+        <td>${sf}</td>
+        <td>${sw}</td>
+        <td><b>${st}</b></td>
+        <td><input class="stocktake-actual-fridge" type="number" min="0" step="0.01" value="${af}" placeholder="实际"></td>
+        <td><input class="stocktake-actual-warehouse" type="number" min="0" step="0.01" value="${aw}" placeholder="实际"></td>
+        <td class="stocktake-diff-cell">${diff}</td>
+        <td>${status}</td>
+        <td><button class="secondary stocktake-save-row">${checked?'更新盘点':'保存盘点'}</button></td>
       </tr>`;
-    }).join('')||'<tr><td colspan="8">暂无符合条件的饮料</td></tr>';
+    }).join('')||'<tr><td colspan="11">这个月份没有需要盘点的饮料</td></tr>';
 
-    body.querySelectorAll('.stocktake-row-btn').forEach(btn=>{
-      btn.onclick=()=>openDialog(btn.dataset.itemId);
+    body.querySelectorAll('tr[data-stocktake-id]').forEach(tr=>{
+      const f=tr.querySelector('.stocktake-actual-fridge');
+      const w=tr.querySelector('.stocktake-actual-warehouse');
+      const updatePreview=()=>previewRow(tr);
+      f?.addEventListener('input',updatePreview);
+      w?.addEventListener('input',updatePreview);
+      tr.querySelector('.stocktake-save-row').onclick=()=>saveRow(tr);
     });
   }
 
-  function buildDialog(){
-    if(document.getElementById('reconStocktakeDialog'))return;
-
-    const d=document.createElement('dialog');
-    d.id='reconStocktakeDialog';
-    d.innerHTML=`
-      <div class="modal recon-stocktake-modal">
-        <h3>盘点调整</h3>
-        <div class="hint recon-stocktake-warning">请输入实际盘点数量。确认后会修改当前库存并留下“盘点调整”记录。</div>
-        <div class="grid2 recon-stocktake-grid">
-          <label class="full">饮料
-            <select id="reconStocktakeItem"></select>
-          </label>
-          <label>盘点日期
-            <input id="reconStocktakeDate" type="date" required>
-          </label>
-          <label>单位
-            <input id="reconStocktakeUnit" disabled>
-          </label>
-
-          <div class="full recon-stocktake-current">
-            <div><small>系统冰箱</small><b id="reconStocktakeSystemFridge">0</b></div>
-            <div><small>系统仓库</small><b id="reconStocktakeSystemWarehouse">0</b></div>
-            <div><small>系统总库存</small><b id="reconStocktakeSystemTotal">0</b></div>
-          </div>
-
-          <label>实际冰箱库存
-            <input id="reconStocktakeActualFridge" type="number" min="0" step="0.01">
-          </label>
-          <label>实际仓库库存
-            <input id="reconStocktakeActualWarehouse" type="number" min="0" step="0.01">
-          </label>
-
-          <div class="full recon-stocktake-diff" id="reconStocktakeDiff"></div>
-
-          <label class="full">备注
-            <input id="reconStocktakeNote" value="月底盘点调整" placeholder="例如：月底盘点调整">
-          </label>
-        </div>
-        <div class="modalfooter">
-          <button id="cancelReconStocktake" class="secondary">取消</button>
-          <button id="saveReconStocktake">确认调整</button>
-        </div>
-      </div>`;
-    document.body.appendChild(d);
-
-    document.getElementById('cancelReconStocktake').onclick=()=>d.close();
-    document.getElementById('saveReconStocktake').onclick=saveStocktake;
-    document.getElementById('reconStocktakeItem').onchange=()=>loadItem(document.getElementById('reconStocktakeItem').value);
-    ['reconStocktakeActualFridge','reconStocktakeActualWarehouse'].forEach(id=>{
-      document.getElementById(id).addEventListener('input',updateDiff);
-    });
-  }
-
-  function openDialog(itemId){
-    const list=[...items].sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'zh-CN',{numeric:true,sensitivity:'base'}));
-    if(!list.length){alert('目前没有饮料资料。');return;}
-
-    const sel=document.getElementById('reconStocktakeItem');
-    sel.innerHTML=list.map(x=>`<option value="${h(x.id)}">${h(x.name||'')}</option>`).join('');
-
-    activeItemId=list.some(x=>String(x.id)===String(itemId))?String(itemId):String(list[0].id);
-    sel.value=activeItemId;
-    document.getElementById('reconStocktakeDate').value=todaySG();
-    document.getElementById('reconStocktakeNote').value='月底盘点调整';
-    loadItem(activeItemId);
-    document.getElementById('reconStocktakeDialog').showModal();
-  }
-
-  function loadItem(id){
-    const item=items.find(x=>String(x.id)===String(id));if(!item)return;
-    activeItemId=String(item.id);
-    const f=clean(item.fridge_quantity),w=clean(item.warehouse_quantity);
-    document.getElementById('reconStocktakeUnit').value=item.unit||'';
-    document.getElementById('reconStocktakeSystemFridge').textContent=f;
-    document.getElementById('reconStocktakeSystemWarehouse').textContent=w;
-    document.getElementById('reconStocktakeSystemTotal').textContent=clean(f+w);
-    document.getElementById('reconStocktakeActualFridge').value=f;
-    document.getElementById('reconStocktakeActualWarehouse').value=w;
-    updateDiff();
-  }
-
-  function updateDiff(){
-    const item=items.find(x=>String(x.id)===String(activeItemId));if(!item)return;
-    const af=Number(document.getElementById('reconStocktakeActualFridge').value);
-    const aw=Number(document.getElementById('reconStocktakeActualWarehouse').value);
-    const box=document.getElementById('reconStocktakeDiff');
-
-    if(!Number.isFinite(af)||af<0||!Number.isFinite(aw)||aw<0){
-      box.innerHTML='<span class="stocktake-bad">请输入正确的实际库存。</span>';
-      return;
+  function previewRow(tr){
+    const r=monthRecords.find(x=>String(x.id)===String(tr.dataset.stocktakeId));if(!r)return;
+    const f=Number(tr.querySelector('.stocktake-actual-fridge').value);
+    const w=Number(tr.querySelector('.stocktake-actual-warehouse').value);
+    const cell=tr.querySelector('.stocktake-diff-cell');
+    if(!Number.isFinite(f)||f<0||!Number.isFinite(w)||w<0){
+      cell.innerHTML='<span class="stocktake-muted">—</span>';return;
     }
-
-    const system=clean(num(item.fridge_quantity)+num(item.warehouse_quantity));
-    const actual=clean(af+aw);
-    const d=clean(actual-system);
-    const fridgeDiff=clean(af-num(item.fridge_quantity));
-    const warehouseDiff=clean(aw-num(item.warehouse_quantity));
-
-    let totalText='<span class="stocktake-ok">总库存一致，无需调整</span>';
-    if(d<0)totalText=`<span class="stocktake-bad">总库存短缺 ${Math.abs(d)}</span>`;
-    else if(d>0)totalText=`<span class="stocktake-warn">总库存多 ${d}</span>`;
-
-    box.innerHTML=`
-      <b>盘点差异：</b> ${totalText}
-      <small>冰箱 ${fridgeDiff>0?'+':''}${fridgeDiff} · 仓库 ${warehouseDiff>0?'+':''}${warehouseDiff}</small>`;
+    const d=clean(f+w-num(r.system_fridge)-num(r.system_warehouse));
+    if(Math.abs(d)<0.000001)cell.innerHTML='<span class="stocktake-ok">0</span>';
+    else cell.innerHTML=`<span class="${d<0?'stocktake-bad':'stocktake-warn'}">${d>0?'+':''}${d}</span>`;
   }
 
-  async function saveStocktake(){
-    const item=items.find(x=>String(x.id)===String(activeItemId));if(!item)return;
-    const date=document.getElementById('reconStocktakeDate').value;
-    const f=Number(document.getElementById('reconStocktakeActualFridge').value);
-    const w=Number(document.getElementById('reconStocktakeActualWarehouse').value);
-    const note=(document.getElementById('reconStocktakeNote').value||'').trim()||'月底盘点调整';
+  async function saveRow(tr){
+    const r=monthRecords.find(x=>String(x.id)===String(tr.dataset.stocktakeId));if(!r)return;
+    const f=Number(tr.querySelector('.stocktake-actual-fridge').value);
+    const w=Number(tr.querySelector('.stocktake-actual-warehouse').value);
+    if(!Number.isFinite(f)||f<0||!Number.isFinite(w)||w<0)return alert('请输入实际冰箱和仓库库存');
 
-    if(!date)return alert('请选择盘点日期');
-    if(date.slice(0,7)!==currentMonth())return alert('盘点调整日期必须是当前月份。');
-    if(!Number.isFinite(f)||f<0||!Number.isFinite(w)||w<0)return alert('实际库存不能小于 0');
+    const sysTotal=clean(num(r.system_fridge)+num(r.system_warehouse));
+    const actualTotal=clean(f+w);
+    const d=clean(actualTotal-sysTotal);
+    const desc=Math.abs(d)<0.000001?'库存一致':(d<0?`短缺 ${Math.abs(d)}`:`多 ${d}`);
+    if(!confirm(`${r.item_name}\n${monthLabel(selectedMonth)} 月末系统库存：${sysTotal}\n实际盘点库存：${actualTotal}\n盘点结果：${desc}\n\n确认保存这次盘点结果吗？`))return;
 
-    const oldF=clean(item.fridge_quantity),oldW=clean(item.warehouse_quantity);
-    if(Math.abs(f-oldF)<0.000001&&Math.abs(w-oldW)<0.000001){
-      alert('实际库存与系统库存一致，不需要盘点调整。');
-      return;
-    }
-
-    const totalBefore=clean(oldF+oldW);
-    const totalAfter=clean(f+w);
-    const diff=clean(totalAfter-totalBefore);
-    const description=diff<0?`短缺 ${Math.abs(diff)}`:`多 ${diff}`;
-
-    if(!confirm(`${item.name}\n系统总库存：${totalBefore}\n实际总库存：${totalAfter}\n差异：${description}\n\n确定进行盘点调整吗？`))return;
-
-    const btn=document.getElementById('saveReconStocktake');
-    btn.disabled=true;btn.textContent='调整中...';
-
+    const btn=tr.querySelector('.stocktake-save-row');
+    btn.disabled=true;btn.textContent='保存中...';
     try{
-      const {error}=await sb.rpc('apply_month_end_stocktake',{
-        p_item:item.id,
-        p_operation_date:date,
-        p_fridge_actual:f,
-        p_warehouse_actual:w,
-        p_note:note
+      const {error}=await sb.rpc('save_monthly_stocktake_result',{
+        p_month_key:selectedMonth,
+        p_item:r.item_id,
+        p_actual_fridge:f,
+        p_actual_warehouse:w,
+        p_note:`${monthLabel(selectedMonth)} 月底盘点`
       });
       if(error)throw error;
 
-      document.getElementById('reconStocktakeDialog').close();
-      await Promise.all([loadAll(),fetchStocktakeHistory()]);
+      await loadAll();
+      allInventoryLogs=await fetchAllInventoryLogs();
+      await fetchMonthRecords();
       renderTable();
-
+      renderHistory();
       if(typeof window.refreshMonthlyReconciliation==='function')window.refreshMonthlyReconciliation(true);
-      if(typeof window.refreshOutNoteHistory==='function')window.refreshOutNoteHistory();
-
-      alert(`${item.name} 盘点调整完成。\n冰箱：${oldF} → ${clean(f)}\n仓库：${oldW} → ${clean(w)}\n总库存：${totalBefore} → ${totalAfter}`);
     }catch(e){
-      alert('盘点调整失败：'+String(e?.message||e));
-    }finally{
-      btn.disabled=false;btn.textContent='确认调整';
+      alert('盘点保存失败：'+String(e?.message||e));
+      btn.disabled=false;btn.textContent=r.actual_fridge!=null?'更新盘点':'保存盘点';
     }
   }
 
-  function addStyle(){
-    if(document.getElementById('reconStocktakeStyle'))return;
+  function parseHistory(r){
+    const parts=String(r.note||'').split('｜').map(x=>x.trim());
+    let location='';
+    if(parts[0]==='冰箱'||parts[0]==='仓库')location=parts.shift();
+    parts.splice(parts.indexOf('盘点调整'),parts.includes('盘点调整')?1:0);
+    const beforePart=parts.find(x=>/^调整前\s/.test(x))||'';
+    const afterPart=parts.find(x=>/^调整后\s/.test(x))||'';
+    const bm=beforePart.match(/^调整前\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    const am=afterPart.match(/^调整后\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    const before=bm?num(bm[1]):null,after=am?num(am[1]):num(r.quantity);
+    const note=parts.filter(x=>x&&x!=='盘点调整'&&!/^调整前\s/.test(x)&&!/^调整后\s/.test(x)).join('｜');
+    return {location,before,after,note,diff:before==null?null:clean(after-before)};
+  }
 
+  function renderHistory(){
+    const body=document.getElementById('stocktakeHistoryBody');if(!body)return;
+    const rows=allInventoryLogs
+      .filter(r=>String(r.action||'')==='ADJUST'&&String(dateOf(r)).slice(0,7)===selectedMonth&&String(r.note||'').includes('盘点调整'))
+      .sort((a,b)=>String(dateOf(b)).localeCompare(String(dateOf(a)))||String(b.created_at||'').localeCompare(String(a.created_at||'')));
+    document.getElementById('stocktakeHistoryCount').textContent=`记录 ${rows.length}`;
+    body.innerHTML=rows.map(r=>{
+      const p=parseHistory(r);
+      const diff=p.diff==null?'—':(p.diff>0?`+${p.diff}`:String(p.diff));
+      return `<tr>
+        <td>${h(dateOf(r))}</td>
+        <td><b>${h(r.item_name||'')}</b></td>
+        <td>${h(p.location||'-')}</td>
+        <td>${p.before==null?'-':clean(p.before)}</td>
+        <td><b>${clean(p.after)}</b></td>
+        <td class="${p.diff<0?'stocktake-bad':p.diff>0?'stocktake-warn':'stocktake-ok'}">${h(diff)}</td>
+        <td>${h(p.note||'')}</td>
+        <td>${h(r.user_email||'')}</td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="8">这个月份没有库存差异调整</td></tr>';
+  }
+
+  function addStyle(){
+    if(document.getElementById('monthStocktakeStyle'))return;
     const s=document.createElement('style');
-    s.id='reconStocktakeStyle';
+    s.id='monthStocktakeStyle';
     s.textContent=`
 #stocktakeAdjust{padding:0 2px 24px}
 .stocktake-page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:4px 0 14px}
-.stocktake-page-head h2{margin:0 0 4px;font-size:22px;color:#102a43}
-.stocktake-page-head>span{font-size:13px;color:#667085;padding-top:5px}
+.stocktake-page-head h2{margin:0 0 4px;font-size:22px;color:#102a43}.stocktake-page-head>span{font-size:13px;color:#667085;padding-top:5px}
 .stocktake-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px;background:#f8fafc}
-.stocktake-toolbar label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px}
-.stocktake-toolbar input{min-width:300px;min-height:42px}
-.stocktake-toolbar-actions{display:flex;gap:8px}
+.stocktake-toolbar-left{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}.stocktake-toolbar label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px}
+#stocktakeMonth{min-width:180px}.stocktake-toolbar input{min-width:300px;min-height:42px}.stocktake-toolbar select{min-height:42px}
 .stocktake-toolbar-actions button{min-height:42px}
-.stocktake-info{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#fff8e8;color:#7b5b16;font-size:13px;line-height:1.6}
-.stocktake-info b{white-space:nowrap}
-.stocktake-card{padding:14px}
-.stocktake-card .section-head h3{margin:0;font-size:17px}
-.stocktake-table-wrap{max-height:68vh;overflow:auto}
-.stocktake-table{min-width:920px}
-.stocktake-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
-.stocktake-table th:nth-child(n+5),.stocktake-table td:nth-child(n+5){text-align:center}
-.stocktake-row-btn{padding:6px 10px;font-size:12px;white-space:nowrap}
-.stocktake-history-card{margin-top:12px}
-.stocktake-history-head{align-items:flex-end}
-.stocktake-history-head>div:first-child .hint{margin-top:4px}
-.stocktake-history-controls{display:flex;align-items:flex-end;gap:12px}
-.stocktake-history-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:5px}
-.stocktake-history-controls select{min-width:150px;min-height:38px}
-.stocktake-history-wrap{max-height:48vh;overflow:auto}
-.stocktake-history-table{min-width:980px}
-.stocktake-history-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
-.stocktake-history-table th:nth-child(3),.stocktake-history-table td:nth-child(3),
-.stocktake-history-table th:nth-child(4),.stocktake-history-table td:nth-child(4),
-.stocktake-history-table th:nth-child(5),.stocktake-history-table td:nth-child(5),
-.stocktake-history-table th:nth-child(6),.stocktake-history-table td:nth-child(6){text-align:center}
-.stocktake-muted{color:#98a2b3}
-
-.recon-stocktake-modal{width:min(620px,100%)}
-.recon-stocktake-warning{padding:10px 12px;margin:-2px 0 14px;background:#fff8e8;border:1px solid #f4dfae;border-radius:10px;line-height:1.55;color:#7b5b16}
-.recon-stocktake-current{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0}
-.recon-stocktake-current>div{border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;background:#f8fafc}
-.recon-stocktake-current small{display:block;color:#667085;margin-bottom:5px}
-.recon-stocktake-current b{font-size:20px;color:#173b5e}
-.recon-stocktake-diff{padding:10px 12px;border-radius:10px;background:#f8fafc;border:1px solid #e5e7eb;line-height:1.5}
-.recon-stocktake-diff small{display:block;margin-top:4px;color:#667085}
-.stocktake-ok{color:#087f5b;font-weight:700}
-.stocktake-bad{color:#c92a2a;font-weight:700}
-.stocktake-warn{color:#b7791f;font-weight:700}
-@media(max-width:620px){
-  .stocktake-toolbar{align-items:stretch;flex-direction:column}
-  .stocktake-toolbar input{min-width:100%;width:100%}
-  .stocktake-toolbar-actions button{width:100%}
-  .stocktake-info{display:block}
-  .stocktake-info b{display:block;margin-bottom:4px}
-  .stocktake-history-head{align-items:flex-start;flex-direction:column}
-  .stocktake-history-controls{width:100%}
-  .stocktake-history-controls label{flex:1}
-  .stocktake-history-controls select{width:100%}
-  .recon-stocktake-current{grid-template-columns:1fr 1fr}
-  .recon-stocktake-current>div:last-child{grid-column:1/-1}
-}
+.stocktake-info{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#fff8e8;color:#7b5b16;font-size:13px;line-height:1.6}.stocktake-info b{white-space:nowrap}
+.stocktake-summary{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:10px;margin-bottom:12px}.stocktake-summary .card{padding:13px 14px}.stocktake-summary small{display:block;color:#667085}.stocktake-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
+.stocktake-card{padding:14px}.stocktake-month-head{align-items:flex-start}.stocktake-card .section-head h3{margin:0;font-size:17px}
+.stocktake-table-wrap{max-height:62vh;overflow:auto}.stocktake-table{min-width:1180px}.stocktake-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
+.stocktake-table th:nth-child(n+4),.stocktake-table td:nth-child(n+4){text-align:center}.stocktake-table input{width:92px;min-height:34px;text-align:center;padding:6px 8px}
+.stocktake-save-row{padding:6px 10px;font-size:12px;white-space:nowrap}.stocktake-sub{font-size:11px;color:#98a2b3;margin-top:3px}
+.stocktake-ok{color:#087f5b;font-weight:700}.stocktake-bad{color:#c92a2a;font-weight:700}.stocktake-warn{color:#b7791f;font-weight:700}.stocktake-muted{color:#98a2b3}
+.stocktake-status-pending{color:#667085}.stocktake-status-ok{background:#edf9f4!important;color:#087f5b!important}.stocktake-status-adjusted{background:#fff4df!important;color:#9a6a1f!important}
+.stocktake-history-card{margin-top:12px}.stocktake-history-wrap{max-height:42vh;overflow:auto}.stocktake-history-table{min-width:980px}.stocktake-history-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
+@media(max-width:900px){.stocktake-summary{grid-template-columns:repeat(2,1fr)}.stocktake-toolbar{align-items:stretch;flex-direction:column}.stocktake-toolbar-left{width:100%}.stocktake-toolbar-left label{flex:1}.stocktake-toolbar input,#stocktakeMonth{width:100%;min-width:0}}
+@media(max-width:620px){.stocktake-info{display:block}.stocktake-info b{display:block;margin-bottom:4px}}
 `;
     document.head.appendChild(s);
   }
