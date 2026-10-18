@@ -77,13 +77,47 @@
     try{localStorage.setItem(RECON_WIDTHS_KEY,JSON.stringify(widths));}catch(e){}
   }
 
+  function measureReconHeaderMin(th,index){
+    if(!th)return 42;
+    const cs=getComputedStyle(th);
+    const probe=document.createElement('span');
+    probe.textContent=String(th.textContent||'').replace(/\s+/g,' ').trim();
+    probe.style.cssText=[
+      'position:fixed',
+      'left:-10000px',
+      'top:-10000px',
+      'visibility:hidden',
+      'display:inline-block',
+      'width:max-content',
+      'min-width:0',
+      'max-width:none',
+      'white-space:nowrap',
+      'box-sizing:border-box',
+      'font-family:'+cs.fontFamily,
+      'font-size:'+cs.fontSize,
+      'font-weight:'+cs.fontWeight,
+      'letter-spacing:'+cs.letterSpacing,
+      'padding-left:'+cs.paddingLeft,
+      'padding-right:'+cs.paddingRight
+    ].join(';');
+    document.body.appendChild(probe);
+    // 排序栏需要额外预留图标与间距；其他栏预留拖动边界空间。
+    const extra=(index===0||index===1)?18:12;
+    const width=Math.ceil(probe.getBoundingClientRect().width+extra);
+    probe.remove();
+    return Math.max(42,width);
+  }
+
   function reconWidthLimits(index){
-    if(index===0)return {min:110,max:520};
-    if(index===1)return {min:55,max:260};
-    if(index===6)return {min:68,max:220};
-    if(index===8)return {min:72,max:220};
-    if(index===18)return {min:48,max:180};
-    return {min:42,max:240};
+    const th=document.querySelector(`#monthlyReconciliation .recon-table thead th:nth-child(${index+1})`);
+    const measured=Number(th?.dataset.headerMinWidth);
+    const min=Number.isFinite(measured)&&measured>0?measured:42;
+    let max=240;
+    if(index===0)max=520;
+    else if(index===1)max=260;
+    else if(index===6||index===8)max=220;
+    else if(index===18)max=180;
+    return {min,max:Math.max(max,min)};
   }
 
   function clampReconWidth(index,value){
@@ -114,6 +148,7 @@
     heads.forEach((th,index)=>{
       th.style.position='sticky';
       th.dataset.colIndex=String(index);
+      th.dataset.headerMinWidth=String(measureReconHeaderMin(th,index));
       const savedWidth=Number(saved[index]);
       const defaultWidth=Number(RECON_DEFAULT_WIDTHS[index]||80);
       setReconColumnWidth(th,index,Number.isFinite(savedWidth)?savedWidth:defaultWidth,false);
@@ -1061,7 +1096,7 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-resize-bubble{position:absolute;z-index:26;pointer-events:none;background:#17324d;color:#fff;border-radius:7px;padding:4px 7px;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 .recon-table-head{position:relative;min-height:32px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}
 .recon-table-meta{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0}.recon-table-meta .hint{margin-top:0;white-space:nowrap}
-.recon-table-wrap{position:relative;max-height:64vh;overflow:auto}.recon-table{min-width:100%}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
+.recon-table-wrap{position:relative;max-height:64vh;overflow:auto}.recon-table{min-width:100%}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap;overflow:visible;text-overflow:clip}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
 @media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}}
 @media(max-width:620px){.recon-summary{grid-template-columns:1fr 1fr}.recon-control-actions{display:grid;grid-template-columns:1fr 1fr}.recon-control-actions button{width:100%}.recon-guide{display:block}.recon-guide b{display:block;margin-bottom:4px}}
 `;document.head.appendChild(s);
