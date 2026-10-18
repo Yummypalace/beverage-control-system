@@ -77,9 +77,68 @@
     try{localStorage.setItem(RECON_WIDTHS_KEY,JSON.stringify(widths));}catch(e){}
   }
 
+  function reconWidthLimits(index){
+    if(index===0)return {min:150,max:520};
+    if(index===1)return {min:78,max:260};
+    if(index===6||index===8)return {min:92,max:220};
+    return {min:62,max:240};
+  }
+
+  function clampReconWidth(index,value){
+    const {min,max}=reconWidthLimits(index);
+    return Math.max(min,Math.min(max,Math.round(Number(value)||min)));
+  }
+
+  function setReconColumnWidth(th,index,width,persist=false){
+    const next=clampReconWidth(index,width);
+    th.style.width=next+'px';
+    th.style.minWidth=next+'px';
+    th.style.maxWidth=next+'px';
+    if(persist){
+      const widths=loadReconColumnWidths();
+      widths[index]=next;
+      saveReconColumnWidths(widths);
+    }
+    return next;
+  }
+
+  function measureReconColumn(index){
+    const table=document.querySelector('#monthlyReconciliation .recon-table');
+    const host=document.getElementById('monthlyReconciliation');
+    if(!table||!host)return RECON_DEFAULT_WIDTHS[index]||80;
+    const cells=[...table.querySelectorAll(`tr > *:nth-child(${index+1})`)].slice(0,80);
+    let best=reconWidthLimits(index).min;
+
+    cells.forEach(cell=>{
+      const probe=document.createElement('div');
+      probe.className=cell.className||'';
+      probe.innerHTML=cell.innerHTML;
+      probe.querySelectorAll('.recon-col-resizer').forEach(x=>x.remove());
+      probe.style.cssText='position:fixed;left:-10000px;top:-10000px;visibility:hidden;width:max-content;min-width:0;max-width:none;white-space:nowrap;padding:10px 12px;box-sizing:border-box;';
+      host.appendChild(probe);
+      best=Math.max(best,Math.ceil(probe.getBoundingClientRect().width)+8);
+      probe.remove();
+    });
+
+    return clampReconWidth(index,best);
+  }
+
+  function resetReconColumnWidths(){
+    try{localStorage.removeItem(RECON_WIDTHS_KEY);}catch(e){}
+    const heads=[...document.querySelectorAll('#monthlyReconciliation .recon-table thead th')];
+    heads.forEach((th,index)=>setReconColumnWidth(th,index,RECON_DEFAULT_WIDTHS[index]||80,false));
+    const btn=document.getElementById('reconResetColumnWidths');
+    if(btn){
+      const old=btn.textContent;
+      btn.textContent='已重置 ✓';
+      setTimeout(()=>{btn.textContent=old||'重置列宽';},900);
+    }
+  }
+
   function installReconColumnResize(){
     const table=document.querySelector('#monthlyReconciliation .recon-table');
-    if(!table)return;
+    const wrap=document.querySelector('#monthlyReconciliation .recon-table-wrap');
+    if(!table||!wrap)return;
     const heads=[...table.querySelectorAll('thead th')];
     const saved=loadReconColumnWidths();
 
@@ -88,44 +147,86 @@
       th.dataset.colIndex=String(index);
       const savedWidth=Number(saved[index]);
       const defaultWidth=Number(RECON_DEFAULT_WIDTHS[index]||80);
-      const width=(Number.isFinite(savedWidth)&&savedWidth>=60)?savedWidth:defaultWidth;
-      th.style.width=width+'px';
-      th.style.minWidth=width+'px';
-      th.style.maxWidth=width+'px';
+      setReconColumnWidth(th,index,Number.isFinite(savedWidth)?savedWidth:defaultWidth,false);
 
       if(th.querySelector('.recon-col-resizer'))return;
       const handle=document.createElement('span');
       handle.className='recon-col-resizer';
-      handle.title='拖动调整列宽';
+      handle.setAttribute('role','separator');
+      handle.setAttribute('aria-orientation','vertical');
+      handle.setAttribute('aria-label','拖动调整列宽，双击自动适应内容');
       th.appendChild(handle);
 
-      handle.addEventListener('mousedown',e=>{
+      handle.addEventListener('pointerdown',e=>{
+        if(e.button!==0)return;
         e.preventDefault();
         e.stopPropagation();
+
+        const pointerId=e.pointerId;
         const startX=e.clientX;
         const startWidth=th.getBoundingClientRect().width;
+        let currentWidth=Math.round(startWidth);
+
+        const guide=document.createElement('div');
+        guide.className='recon-resize-guide';
+        const bubble=document.createElement('div');
+        bubble.className='recon-resize-bubble';
+        bubble.textContent=currentWidth+' px';
+        wrap.appendChild(guide);
+        wrap.appendChild(bubble);
+
+        const placeGuide=clientX=>{
+          const rect=wrap.getBoundingClientRect();
+          const left=clientX-rect.left+wrap.scrollLeft;
+          guide.style.left=left+'px';
+          guide.style.top=wrap.scrollTop+'px';
+          guide.style.height=wrap.clientHeight+'px';
+          bubble.style.left=Math.max(wrap.scrollLeft+4,left-26)+'px';
+          bubble.style.top=(wrap.scrollTop+6)+'px';
+        };
+
+        placeGuide(e.clientX);
+        th.classList.add('recon-resizing-col');
+        handle.classList.add('is-active');
         document.body.classList.add('recon-resizing');
 
         const move=ev=>{
-          const width=Math.max(60,Math.round(startWidth+ev.clientX-startX));
-          th.style.width=width+'px';
-          th.style.minWidth=width+'px';
-          th.style.maxWidth=width+'px';
+          if(ev.pointerId!==pointerId)return;
+          currentWidth=setReconColumnWidth(th,index,startWidth+ev.clientX-startX,false);
+          bubble.textContent=currentWidth+' px';
+          placeGuide(ev.clientX);
         };
 
-        const up=()=>{
-          document.removeEventListener('mousemove',move);
-          document.removeEventListener('mouseup',up);
+        const up=ev=>{
+          if(ev.pointerId!==pointerId)return;
+          document.removeEventListener('pointermove',move);
+          document.removeEventListener('pointerup',up);
+          document.removeEventListener('pointercancel',up);
           document.body.classList.remove('recon-resizing');
-          const widths=loadReconColumnWidths();
-          widths[index]=Math.round(th.getBoundingClientRect().width);
-          saveReconColumnWidths(widths);
+          th.classList.remove('recon-resizing-col');
+          handle.classList.remove('is-active');
+          guide.remove();
+          bubble.remove();
+          setReconColumnWidth(th,index,currentWidth,true);
         };
 
-        document.addEventListener('mousemove',move);
-        document.addEventListener('mouseup',up);
+        document.addEventListener('pointermove',move);
+        document.addEventListener('pointerup',up);
+        document.addEventListener('pointercancel',up);
+      });
+
+      handle.addEventListener('dblclick',e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const width=measureReconColumn(index);
+        setReconColumnWidth(th,index,width,true);
+        th.classList.add('recon-autosized-col');
+        setTimeout(()=>th.classList.remove('recon-autosized-col'),500);
       });
     });
+
+    const reset=document.getElementById('reconResetColumnWidths');
+    if(reset)reset.onclick=resetReconColumnWidths;
   }
 
   function wait(){
@@ -193,7 +294,11 @@
         <div class="section-head recon-table-head">
           <h3>库存 / POS 月结对照</h3>
           <div id="reconMonthTitle" class="recon-month-title"></div>
-          <span id="reconInventoryDateHint" class="hint"></span>
+          <div class="recon-table-meta">
+            <span id="reconInventoryDateHint" class="hint"></span>
+            <span class="recon-resize-help">拖动列边界调整 · 双击自动适应</span>
+            <button id="reconResetColumnWidths" type="button" class="secondary recon-reset-widths">重置列宽</button>
+          </div>
         </div>
         <div class="tablewrap recon-table-wrap">
           <table class="recon-table">
@@ -954,8 +1059,20 @@
 .recon-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px;background:#f8fafc}.recon-control-left{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}.recon-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px;min-width:190px}.recon-controls select,.recon-controls input{min-height:42px}.recon-search-label{min-width:260px!important}.recon-control-actions{display:flex;gap:8px;align-items:center}.recon-control-actions button{min-height:42px}.recon-autosave-status{display:inline-flex;align-items:center;min-height:42px;padding:0 12px;border-radius:10px;background:#eef2f6;color:#667085;font-size:13px;font-weight:700;white-space:nowrap}.recon-autosave-status[data-state="saving"],.recon-autosave-status[data-state="pending"]{color:#b7791f}.recon-autosave-status[data-state="saved"]{color:#087f5b;background:#edf9f4}.recon-autosave-status[data-state="error"]{color:#c92a2a;background:#fff1f1}.recon-pos-error{border-color:#c92a2a!important;box-shadow:0 0 0 2px rgba(201,42,42,.08)!important}
 .recon-summary{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:10px;margin-bottom:12px}.recon-summary .card{padding:13px 14px}.recon-summary small{display:block;color:#667085}.recon-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
 .recon-guide{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#f7f9fc;color:#475467;font-size:13px;line-height:1.6}.recon-guide b{color:#173b5e;white-space:nowrap}
-.recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-sort-btn{background:none!important;color:#667085!important;padding:0!important;border:0!important;border-radius:0!important;font-size:12px!important;font-weight:700!important;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.recon-sort-btn:hover{color:#173b5e!important}.recon-sort-arrow{font-size:10px;min-width:10px;text-align:center}.recon-ent-head{background:#eef1f4!important;color:#59636e!important}.recon-table tbody td.recon-ent-col{background:#f3f4f6}.recon-ent-actual-input{width:82px;min-height:34px;padding:6px 8px;background:#fff!important}.recon-ent-diff{font-weight:700}.recon-table{table-layout:fixed;width:max-content}.recon-table thead th{position:sticky}.recon-col-resizer{position:absolute;right:0;top:0;width:12px;height:100%;cursor:col-resize;z-index:30;user-select:none;border-right:2px solid transparent}.recon-col-resizer:hover{border-right-color:rgba(23,59,94,.35);background:rgba(23,59,94,.06)}body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.recon-resizing *{cursor:col-resize!important}.recon-table-head{position:relative;min-height:28px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}.recon-table-wrap{max-height:64vh;overflow:auto}.recon-table{min-width:0}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:92px;min-height:36px;padding:7px 8px}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
-@media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}}
+.recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-sort-btn{background:none!important;color:#667085!important;padding:0!important;border:0!important;border-radius:0!important;font-size:12px!important;font-weight:700!important;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.recon-sort-btn:hover{color:#173b5e!important}.recon-sort-arrow{font-size:10px;min-width:10px;text-align:center}.recon-ent-head{background:#eef1f4!important;color:#59636e!important}.recon-table tbody td.recon-ent-col{background:#f3f4f6}.recon-ent-actual-input{width:82px;min-height:34px;padding:6px 8px;background:#fff!important}.recon-ent-diff{font-weight:700}.recon-table{table-layout:fixed;width:max-content}.recon-table thead th{position:sticky}
+.recon-col-resizer{position:absolute;right:-7px;top:0;width:14px;height:100%;cursor:col-resize;z-index:30;user-select:none;touch-action:none;background:transparent}
+.recon-col-resizer::after{content:"";position:absolute;left:6px;top:18%;width:2px;height:64%;border-radius:2px;background:#d7dde5;opacity:.35;transition:opacity .15s,background .15s,width .15s,box-shadow .15s}
+.recon-col-resizer:hover::after,.recon-col-resizer.is-active::after{width:3px;background:#173b5e;opacity:.75;box-shadow:0 0 0 2px rgba(23,59,94,.08)}
+.recon-table thead th.recon-resizing-col{background:#edf3f8!important;box-shadow:inset -2px 0 0 rgba(23,59,94,.18)}
+.recon-table thead th.recon-autosized-col{animation:reconWidthFlash .45s ease}
+@keyframes reconWidthFlash{0%{background:#dfeaf4!important}100%{background:#f8fafc!important}}
+body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.recon-resizing *{cursor:col-resize!important}
+.recon-resize-guide{position:absolute;width:2px;background:#173b5e;opacity:.65;z-index:25;pointer-events:none;box-shadow:0 0 0 1px rgba(255,255,255,.7)}
+.recon-resize-bubble{position:absolute;z-index:26;pointer-events:none;background:#17324d;color:#fff;border-radius:7px;padding:4px 7px;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.recon-table-head{position:relative;min-height:32px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}
+.recon-table-meta{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0}.recon-table-meta .hint{margin-top:0;white-space:nowrap}.recon-resize-help{font-size:11px;color:#98a2b3;white-space:nowrap}.recon-reset-widths{padding:5px 8px!important;min-height:0!important;font-size:11px!important;white-space:nowrap}
+.recon-table-wrap{position:relative;max-height:64vh;overflow:auto}.recon-table{min-width:0}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:92px;min-height:36px;padding:7px 8px}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
+@media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}.recon-resize-help{display:none}}
 @media(max-width:620px){.recon-summary{grid-template-columns:1fr 1fr}.recon-control-actions{display:grid;grid-template-columns:1fr 1fr}.recon-control-actions button{width:100%}.recon-guide{display:block}.recon-guide b{display:block;margin-bottom:4px}}
 `;document.head.appendChild(s);
   }
