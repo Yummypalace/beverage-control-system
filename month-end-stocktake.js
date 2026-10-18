@@ -798,7 +798,7 @@
 #stocktakeMonth{min-width:180px}.stocktake-toolbar input{min-width:300px;min-height:42px}.stocktake-toolbar select{min-height:42px}
 .stocktake-toolbar-actions button{min-height:42px}
 .stocktake-info{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#fff8e8;color:#7b5b16;font-size:13px;line-height:1.6}.stocktake-info b{white-space:nowrap}
-.stocktake-summary{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:10px;margin-bottom:12px}.stocktake-summary .card{padding:13px 14px}.stocktake-summary small{display:block;color:#667085}.stocktake-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
+.stocktake-summary{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:10px;margin-bottom:12px}.stocktake-summary .card{padding:13px 14px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.stocktake-summary small{display:block;color:#667085;text-align:center}.stocktake-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e;text-align:center}
 .stocktake-card{padding:14px}.stocktake-month-head{align-items:flex-start}.stocktake-card .section-head h3{margin:0;font-size:17px}
 .stocktake-table-wrap{position:relative;max-height:62vh;overflow:auto}.stocktake-table{min-width:960px}.stocktake-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important;white-space:nowrap;overflow:visible}
 .stocktake-table th:nth-child(2),.stocktake-table td:nth-child(2),.stocktake-table th:nth-child(3),.stocktake-table td:nth-child(3),.stocktake-table th:nth-child(n+4),.stocktake-table td:nth-child(n+4){text-align:center}
