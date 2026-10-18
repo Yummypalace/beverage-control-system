@@ -553,9 +553,18 @@
     });
 
     currentWidths.forEach((width,index)=>cols[index].style.width=width+'px');
-    table.style.width=currentWidths.reduce((s,w)=>s+w,0)+'px';
+    const fitTableWidth=widths=>{
+      const total=widths.reduce((s,w)=>s+w,0);
+      table.style.width=Math.max(total,Math.floor(wrap.clientWidth))+'px';
+    };
+    fitTableWidth(currentWidths);
     table.style.minWidth='0';
     table.style.tableLayout='fixed';
+
+    if(!wrap.dataset.stocktakeResizeBound){
+      wrap.dataset.stocktakeResizeBound='1';
+      window.addEventListener('resize',()=>requestAnimationFrame(installStocktakeColumnResize));
+    }
 
     heads.forEach((th,index)=>{
       if(th.querySelector('.stocktake-col-resizer'))return;
@@ -584,7 +593,7 @@
           const next=Math.max(min,Math.round(startWidth+ev.clientX-startX));
           cols[index].style.width=next+'px';
           widths[index]=next;
-          table.style.width=widths.reduce((s,w)=>s+w,0)+'px';
+          fitTableWidth(widths);
         };
 
         const up=()=>{
@@ -792,7 +801,8 @@
 .stocktake-summary{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:10px;margin-bottom:12px}.stocktake-summary .card{padding:13px 14px}.stocktake-summary small{display:block;color:#667085}.stocktake-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
 .stocktake-card{padding:14px}.stocktake-month-head{align-items:flex-start}.stocktake-card .section-head h3{margin:0;font-size:17px}
 .stocktake-table-wrap{position:relative;max-height:62vh;overflow:auto}.stocktake-table{min-width:960px}.stocktake-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important;white-space:nowrap;overflow:visible}
-.stocktake-table th:nth-child(n+4),.stocktake-table td:nth-child(n+4){text-align:center}
+.stocktake-table th:nth-child(2),.stocktake-table td:nth-child(2),.stocktake-table th:nth-child(3),.stocktake-table td:nth-child(3),.stocktake-table th:nth-child(n+4),.stocktake-table td:nth-child(n+4){text-align:center}
+.stocktake-table th:nth-child(2) .stocktake-sort-head{justify-content:center}
 .stocktake-sort-head{display:inline-flex;align-items:center;gap:5px;padding:0;background:none!important;border:0!important;color:#667085!important;font:inherit;font-weight:700;cursor:pointer;white-space:nowrap}
 .stocktake-sort-head:hover,.stocktake-sort-head.is-active{color:#173b5e!important}
 .stocktake-sort-arrow{font-size:10px;line-height:1;color:#98a2b3}.stocktake-sort-head.is-active .stocktake-sort-arrow{color:#173b5e}
