@@ -18,10 +18,11 @@
 .side-nav a[href="#inventory"]{order:20}
 .side-nav a[href="#commission"]{order:30}
 .side-nav a[href="#outNotes"]{order:40}
-.side-nav a[href="#monthlyReconciliation"]{order:50}
-.side-nav a[href="#corrections"]{order:60}
-.side-nav a[href="#settings"]{order:70}
-.side-nav a[href="#logs"]{order:80}
+.side-nav a[href="#stocktakeAdjust"]{order:50}
+.side-nav a[href="#monthlyReconciliation"]{order:60}
+.side-nav a[href="#corrections"]{order:70}
+.side-nav a[href="#settings"]{order:80}
+.side-nav a[href="#logs"]{order:90}
 `;
       document.head.appendChild(s);
     }
