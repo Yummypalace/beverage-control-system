@@ -5,12 +5,30 @@
 
   let installed=false;
   let activeItemId='';
+  let stocktakeHistory=[];
+  let stocktakeHistoryMonth='';
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function num(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
   function clean(v){return Number(num(v).toFixed(2));}
   function todaySG(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
   function currentMonth(){return todaySG().slice(0,7);}
+  function dateOf(r){return r.operation_date||new Date(r.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
+  function monthLabel(v){const [y,m]=String(v||'').split('-');return y&&m?`${y}年${Number(m)}月`:'';}
+  function parseStocktakeLog(r){
+    const parts=String(r?.note||'').split('｜').map(x=>String(x).trim());
+    let location='';
+    if(parts.length&&/^(冰箱|仓库)$/.test(parts[0]))location=parts.shift();
+    parts.splice(parts.indexOf('盘点调整'),parts.includes('盘点调整')?1:0);
+    const beforePart=parts.find(x=>/^调整前\s/.test(x))||'';
+    const afterPart=parts.find(x=>/^调整后\s/.test(x))||'';
+    const beforeMatch=beforePart.match(/^调整前\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    const afterMatch=afterPart.match(/^调整后\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
+    const before=beforeMatch?num(beforeMatch[1]):null;
+    const after=afterMatch?num(afterMatch[1]):num(r?.quantity);
+    const note=parts.filter(x=>x&&!/^调整前\s/.test(x)&&!/^调整后\s/.test(x)&&x!=='盘点调整').join('｜').trim();
+    return {location,before,after,note,diff:before===null?null:clean(after-before)};
+  }
 
   function wait(){
     if(typeof sb==='undefined'||typeof items==='undefined'||typeof loadAll!=='function'||typeof showPage!=='function'||!document.querySelector('.side-nav')||!document.querySelector('.content-area')){
@@ -83,11 +101,47 @@
             <tbody id="stocktakeBody"><tr><td colspan="8">读取中...</td></tr></tbody>
           </table>
         </div>
+      </div>
+
+      <div class="card stocktake-card stocktake-history-card">
+        <div class="section-head stocktake-history-head">
+          <div>
+            <h3>盘点调整记录</h3>
+            <div class="hint">盘点备注只在这里显示，不会混入「出入库备注」。</div>
+          </div>
+          <div class="stocktake-history-controls">
+            <label>月份
+              <select id="stocktakeHistoryMonth"></select>
+            </label>
+            <span id="stocktakeHistoryCount" class="hint"></span>
+          </div>
+        </div>
+        <div class="tablewrap stocktake-history-wrap">
+          <table class="stocktake-history-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>饮料</th>
+                <th>位置</th>
+                <th>调整前</th>
+                <th>调整后</th>
+                <th>差异</th>
+                <th>备注</th>
+                <th>操作人</th>
+              </tr>
+            </thead>
+            <tbody id="stocktakeHistoryBody"><tr><td colspan="8">读取中...</td></tr></tbody>
+          </table>
+        </div>
       </div>`;
     content.appendChild(section);
 
     document.getElementById('stocktakeSearch').addEventListener('input',renderTable);
     document.getElementById('stocktakeRefresh').onclick=refreshPage;
+    document.getElementById('stocktakeHistoryMonth').onchange=()=>{
+      stocktakeHistoryMonth=document.getElementById('stocktakeHistoryMonth').value||'';
+      renderStocktakeHistory();
+    };
   }
 
   function extendNavigation(){
@@ -123,13 +177,73 @@
     };
   }
 
+  async function fetchStocktakeHistory(){
+    const all=[];let from=0;const size=1000;
+    while(true){
+      const {data,error}=await sb.from('inventory_logs')
+        .select('*')
+        .eq('action','ADJUST')
+        .order('operation_date',{ascending:false})
+        .order('created_at',{ascending:false})
+        .range(from,from+size-1);
+      if(error)throw error;
+      const page=data||[];
+      all.push(...page);
+      if(page.length<size)break;
+      from+=size;
+    }
+    stocktakeHistory=all.filter(r=>!r.correction_ref).map(r=>({...r,_date:dateOf(r),_parsed:parseStocktakeLog(r)}));
+    populateStocktakeHistoryMonths();
+    renderStocktakeHistory();
+  }
+
+  function populateStocktakeHistoryMonths(){
+    const sel=document.getElementById('stocktakeHistoryMonth');if(!sel)return;
+    const previous=stocktakeHistoryMonth||currentMonth();
+    const months=new Set([currentMonth()]);
+    stocktakeHistory.forEach(r=>{const m=String(r._date||'').slice(0,7);if(/^\d{4}-\d{2}$/.test(m))months.add(m);});
+    const list=[...months].sort((a,b)=>b.localeCompare(a));
+    sel.innerHTML='<option value="">全部月份</option>'+list.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
+    stocktakeHistoryMonth=list.includes(previous)?previous:(stocktakeHistoryMonth===''?'':currentMonth());
+    sel.value=stocktakeHistoryMonth;
+  }
+
+  function renderStocktakeHistory(){
+    const body=document.getElementById('stocktakeHistoryBody');
+    const count=document.getElementById('stocktakeHistoryCount');
+    if(!body)return;
+    const month=stocktakeHistoryMonth;
+    const rows=stocktakeHistory.filter(r=>!month||String(r._date||'').slice(0,7)===month);
+    if(count)count.textContent=`记录 ${rows.length}`;
+
+    body.innerHTML=rows.map(r=>{
+      const p=r._parsed||parseStocktakeLog(r);
+      let diff='<span class="stocktake-muted">—</span>';
+      if(p.diff!==null){
+        if(Math.abs(p.diff)<0.000001)diff='<span class="stocktake-ok">0</span>';
+        else if(p.diff<0)diff=`<span class="stocktake-bad">${p.diff}</span>`;
+        else diff=`<span class="stocktake-warn">+${p.diff}</span>`;
+      }
+      return `<tr>
+        <td>${h(r._date||'')}</td>
+        <td><b>${h(r.item_name||'')}</b></td>
+        <td>${h(p.location||'-')}</td>
+        <td>${p.before===null?'-':clean(p.before)}</td>
+        <td><b>${clean(p.after)}</b></td>
+        <td>${diff}</td>
+        <td>${h(p.note||'')}</td>
+        <td>${h(r.user_email||'')}</td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="8">这个月份没有盘点调整记录</td></tr>';
+  }
+
   async function refreshPage(){
     const btn=document.getElementById('stocktakeRefresh');
     const status=document.getElementById('stocktakePageStatus');
     if(btn){btn.disabled=true;btn.textContent='刷新中...';}
     if(status)status.textContent='读取中...';
     try{
-      await loadAll();
+      await Promise.all([loadAll(),fetchStocktakeHistory()]);
       renderTable();
       if(status)status.textContent='已更新';
     }catch(e){
@@ -320,7 +434,7 @@
       if(error)throw error;
 
       document.getElementById('reconStocktakeDialog').close();
-      await loadAll();
+      await Promise.all([loadAll(),fetchStocktakeHistory()]);
       renderTable();
 
       if(typeof window.refreshMonthlyReconciliation==='function')window.refreshMonthlyReconciliation(true);
@@ -358,6 +472,20 @@
 .stocktake-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
 .stocktake-table th:nth-child(n+5),.stocktake-table td:nth-child(n+5){text-align:center}
 .stocktake-row-btn{padding:6px 10px;font-size:12px;white-space:nowrap}
+.stocktake-history-card{margin-top:12px}
+.stocktake-history-head{align-items:flex-end}
+.stocktake-history-head>div:first-child .hint{margin-top:4px}
+.stocktake-history-controls{display:flex;align-items:flex-end;gap:12px}
+.stocktake-history-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:5px}
+.stocktake-history-controls select{min-width:150px;min-height:38px}
+.stocktake-history-wrap{max-height:48vh;overflow:auto}
+.stocktake-history-table{min-width:980px}
+.stocktake-history-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
+.stocktake-history-table th:nth-child(3),.stocktake-history-table td:nth-child(3),
+.stocktake-history-table th:nth-child(4),.stocktake-history-table td:nth-child(4),
+.stocktake-history-table th:nth-child(5),.stocktake-history-table td:nth-child(5),
+.stocktake-history-table th:nth-child(6),.stocktake-history-table td:nth-child(6){text-align:center}
+.stocktake-muted{color:#98a2b3}
 
 .recon-stocktake-modal{width:min(620px,100%)}
 .recon-stocktake-warning{padding:10px 12px;margin:-2px 0 14px;background:#fff8e8;border:1px solid #f4dfae;border-radius:10px;line-height:1.55;color:#7b5b16}
@@ -376,6 +504,10 @@
   .stocktake-toolbar-actions button{width:100%}
   .stocktake-info{display:block}
   .stocktake-info b{display:block;margin-bottom:4px}
+  .stocktake-history-head{align-items:flex-start;flex-direction:column}
+  .stocktake-history-controls{width:100%}
+  .stocktake-history-controls label{flex:1}
+  .stocktake-history-controls select{width:100%}
   .recon-stocktake-current{grid-template-columns:1fr 1fr}
   .recon-stocktake-current>div:last-child{grid-column:1/-1}
 }
