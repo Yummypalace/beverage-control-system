@@ -31,6 +31,9 @@
     if(r.actual_fridge==null||r.actual_warehouse==null)return null;
     return clean(num(r.actual_fridge)+num(r.actual_warehouse)-num(r.system_fridge)-num(r.system_warehouse));
   }
+  function sameAsSystem(r,fridge,warehouse){
+    return Math.abs(num(fridge)-num(r.system_fridge))<0.000001&&Math.abs(num(warehouse)-num(r.system_warehouse))<0.000001;
+  }
   function user(){return typeof userEmail==='function'?userEmail():'';}
 
   function wait(){
@@ -401,9 +404,13 @@
       let diff='<span class="stocktake-muted">—</span>';
       let status='<span class="stocktake-muted">—</span>';
       if(adjusted){
-        if(Math.abs(d)<0.000001){
-          diff='<span class="stocktake-ok">0</span>';
-          status='<span class="pill stocktake-status-ok">已记录</span>';
+        const restored=sameAsSystem(r,r.actual_fridge,r.actual_warehouse);
+        if(restored){
+          diff='<span class="stocktake-muted">—</span>';
+          status='<span class="stocktake-muted">—</span>';
+        }else if(Math.abs(d)<0.000001){
+          diff='<span class="stocktake-warn">位置调整</span>';
+          status='<span class="pill stocktake-status-adjusted">已调整</span>';
         }else{
           diff=`<span class="${d<0?'stocktake-bad':'stocktake-warn'}">${d>0?'+':''}${d}</span>`;
           status='<span class="pill stocktake-status-adjusted">已调整</span>';
@@ -531,11 +538,12 @@
     const actualTotal=clean(f+w);
     const d=clean(actualTotal-sysTotal);
 
-    if(Math.abs(d)<0.000001&&r.actual_fridge==null&&r.actual_warehouse==null){
+    const exactRestore=sameAsSystem(r,f,w);
+    if(exactRestore&&r.actual_fridge==null&&r.actual_warehouse==null){
       return alert('这项实际库存与系统月末库存一致，不需要做盘点调整。');
     }
 
-    const desc=Math.abs(d)<0.000001?'调整后与系统月末数量一致':(d<0?`短缺 ${Math.abs(d)}`:`多 ${d}`);
+    const desc=exactRestore?'还原为系统月末数量，原调整记录会清除':(Math.abs(d)<0.000001?'总数不变，仅调整冰箱 / 仓库位置':(d<0?`短缺 ${Math.abs(d)}`:`多 ${d}`));
     if(!confirm(`${r.item_name}\n${monthLabel(selectedMonth)} 月末系统库存：${sysTotal}\n确认的正确库存：${actualTotal}\n盘点差异：${desc}\n\n确定保存盘点调整吗？`))return;
 
     const btn=document.getElementById('saveMonthlyStocktake');
