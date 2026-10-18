@@ -8,7 +8,7 @@
   const CATEGORIES=['正常销售','ENT','FOC','厨房使用','NO Paid','取消入库','其他'];
 
   function currentMonth(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'}).slice(0,7);}
-  async function checkAdminEditPermission(){
+  async function checkEditPermission(){
     try{
       const {data:{session}}=await sb.auth.getSession();
       if(!session){
@@ -16,7 +16,7 @@
         decorateRows(true);
         return;
       }
-      const {data,error}=await sb.rpc('is_app_admin');
+      const {data,error}=await sb.rpc('is_app_active');
       canEditOldOutType=!error&&data===true;
       decorateRows(true);
     }catch(e){
@@ -25,11 +25,11 @@
     }
   }
 
-  function watchAdminEditPermission(){
+  function watchEditPermission(){
     if(window.__outNoteAdminPermissionWatcherInstalled)return;
     window.__outNoteAdminPermissionWatcherInstalled=true;
     sb.auth.onAuthStateChange((event,session)=>{
-      setTimeout(()=>checkAdminEditPermission(),120);
+      setTimeout(()=>checkEditPermission(),120);
     });
   }
 
@@ -85,9 +85,9 @@
     addControls();
     addStyle();
     bindActions();
-    watchAdminEditPermission();
-    checkAdminEditPermission();
-    setTimeout(()=>checkAdminEditPermission(),600);
+    watchEditPermission();
+    checkEditPermission();
+    setTimeout(()=>checkEditPermission(),600);
     observer=new MutationObserver(()=>setTimeout(()=>{decorateRows();populateMonths();applyExtraFilters();},0));
     observer.observe(document.getElementById('outNoteBody'),{childList:true});
     setTimeout(()=>{decorateRows();populateMonths(true);applyExtraFilters();},100);
