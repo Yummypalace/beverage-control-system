@@ -67,7 +67,7 @@
       <div class="stocktake-page-head">
         <div>
           <h2>盘点调整</h2>
-          <div class="hint">按月份保留月末系统库存记录。你们用手写盘点单核对后，只有发现不一致的饮料才需要做盘点调整。</div>
+          <div class="hint">按月份保留月末系统库存记录。用手写盘点单核对后，只有发现不一致的饮料才需要做盘点调整。</div>
         </div>
         <span id="stocktakePageStatus"></span>
       </div>
