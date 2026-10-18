@@ -4,6 +4,7 @@
   'use strict';
   let installed=false;
   let rows=[];
+  let loadRunId=0;
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function dateOf(r){return r.operation_date||new Date(r.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
@@ -133,32 +134,52 @@
     };
   }
 
-  async function fetchAllInventoryLogs(){
-    const all=[];let from=0;const size=1000;
-    while(true){
-      const {data,error}=await sb.from('inventory_logs').select('*').order('operation_date',{ascending:false}).order('created_at',{ascending:false}).range(from,from+size-1);
-      if(error)throw error;
-      const page=data||[];all.push(...page);
-      if(page.length<size)break;
-      from+=size;
+  async function fetchAllInventoryLogs(attempt=0){
+    try{
+      const all=[];let from=0;const size=1000;
+      while(true){
+        const {data,error}=await sb.from('inventory_logs').select('*').order('operation_date',{ascending:false}).order('created_at',{ascending:false}).range(from,from+size-1);
+        if(error)throw error;
+        const page=data||[];all.push(...page);
+        if(page.length<size)break;
+        from+=size;
+      }
+      return all;
+    }catch(e){
+      if(attempt<2){
+        await new Promise(r=>setTimeout(r,220*(attempt+1)));
+        return fetchAllInventoryLogs(attempt+1);
+      }
+      throw e;
     }
-    return all;
   }
 
   async function loadRows(){
     const body=document.getElementById('outNoteBody');if(!body)return;
-    body.innerHTML='<tr><td colspan="7">读取中...</td></tr>';
+    const runId=++loadRunId;
+    const hadRows=rows.length>0;
+    if(!hadRows)body.innerHTML='<tr><td colspan="7">读取中...</td></tr>';
     try{
       const data=await fetchAllInventoryLogs();
-      rows=data.filter(meaningful).map(r=>{
+      if(runId!==loadRunId)return;
+      const nextRows=data.filter(meaningful).map(r=>{
         const p=parseNote(r);
         return {...r,_date:dateOf(r),_location:p.location,_businessNote:p.note,_actionLabel:actionLabel(r.action)};
       });
-      rows.sort((a,b)=>String(b._date).localeCompare(String(a._date))||String(b.created_at||'').localeCompare(String(a.created_at||'')));
+      nextRows.sort((a,b)=>String(b._date).localeCompare(String(a._date))||String(b.created_at||'').localeCompare(String(a.created_at||'')));
+      rows=nextRows;
       populateItems();
       renderRows();
     }catch(e){
-      body.innerHTML=`<tr><td colspan="7">读取失败：${h(e.message||e)}</td></tr>`;
+      if(runId!==loadRunId)return;
+      console.warn('出入库备注读取失败，保留现有资料',e);
+      if(hadRows){
+        renderRows();
+        const count=document.getElementById('outNoteCount');
+        if(count)count.textContent='读取失败，已保留现有资料';
+      }else{
+        body.innerHTML=`<tr><td colspan="7">读取失败：${h(e.message||e)}</td></tr>`;
+      }
     }
   }
 
