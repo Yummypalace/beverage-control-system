@@ -11,6 +11,7 @@
   let loading=false;
   let activeStocktakeId='';
   const STOCKTAKE_SORT_KEY='monthlyStocktakeSortModeV1';
+  const STOCKTAKE_SORT_DIR_KEY='monthlyStocktakeSortDirectionV1';
   const STOCKTAKE_WIDTHS_KEY='monthlyStocktakeColumnWidthsV1';
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
@@ -79,12 +80,6 @@
           <label>搜索饮料
             <input id="stocktakeSearch" placeholder="名称 / 类别 / 规格">
           </label>
-          <label>排序
-            <select id="stocktakeSortMode">
-              <option value="name">按名称排序</option>
-              <option value="category">按类别排序</option>
-            </select>
-          </label>
         </div>
         <div class="stocktake-toolbar-actions">
           <button id="stocktakeRefresh" class="secondary">刷新</button>
@@ -118,8 +113,8 @@
           <table class="stocktake-table">
             <thead>
               <tr>
-                <th>名称</th>
-                <th>类别</th>
+                <th><button type="button" class="stocktake-sort-head" data-sort="name"><span>名称</span><span class="stocktake-sort-arrow">↕</span></button></th>
+                <th><button type="button" class="stocktake-sort-head" data-sort="category"><span>类别</span><span class="stocktake-sort-arrow">↕</span></button></th>
                 <th>单位</th>
                 <th>系统冰箱</th>
                 <th>系统仓库</th>
@@ -158,12 +153,18 @@
       await loadSelectedMonth();
     };
     document.getElementById('stocktakeSearch').oninput=renderTable;
-    const sortSel=document.getElementById('stocktakeSortMode');
-    sortSel.value=localStorage.getItem(STOCKTAKE_SORT_KEY)==='category'?'category':'name';
-    sortSel.onchange=()=>{
-      localStorage.setItem(STOCKTAKE_SORT_KEY,sortSel.value==='category'?'category':'name');
-      renderTable();
-    };
+    document.querySelectorAll('#stocktakeAdjust .stocktake-sort-head').forEach(btn=>{
+      btn.onclick=()=>{
+        const field=btn.dataset.sort==='category'?'category':'name';
+        const current=localStorage.getItem(STOCKTAKE_SORT_KEY)==='category'?'category':'name';
+        const currentDir=localStorage.getItem(STOCKTAKE_SORT_DIR_KEY)==='desc'?'desc':'asc';
+        const nextDir=current===field?(currentDir==='asc'?'desc':'asc'):'asc';
+        localStorage.setItem(STOCKTAKE_SORT_KEY,field);
+        localStorage.setItem(STOCKTAKE_SORT_DIR_KEY,nextDir);
+        renderTable();
+      };
+    });
+    updateStocktakeSortHeaders();
     document.getElementById('stocktakeRefresh').onclick=refreshPage;
   }
 
@@ -391,22 +392,45 @@
     return String(a||'').localeCompare(String(b||''),'zh-CN',{numeric:true,sensitivity:'base'});
   }
 
+  function stocktakeSortState(){
+    return {
+      mode:localStorage.getItem(STOCKTAKE_SORT_KEY)==='category'?'category':'name',
+      dir:localStorage.getItem(STOCKTAKE_SORT_DIR_KEY)==='desc'?'desc':'asc'
+    };
+  }
+
+  function updateStocktakeSortHeaders(){
+    const state=stocktakeSortState();
+    document.querySelectorAll('#stocktakeAdjust .stocktake-sort-head').forEach(btn=>{
+      const active=btn.dataset.sort===state.mode;
+      btn.classList.toggle('is-active',active);
+      btn.setAttribute('aria-sort',active?(state.dir==='asc'?'ascending':'descending'):'none');
+      const arrow=btn.querySelector('.stocktake-sort-arrow');
+      if(arrow)arrow.textContent=active?(state.dir==='asc'?'▲':'▼'):'↕';
+    });
+  }
+
   function filteredRecords(){
     const kw=(document.getElementById('stocktakeSearch')?.value||'').trim().toLowerCase();
-    const mode=document.getElementById('stocktakeSortMode')?.value==='category'?'category':'name';
+    const {mode,dir}=stocktakeSortState();
+    const factor=dir==='desc'?-1:1;
     return monthRecords
       .filter(r=>!kw||[r.item_name,r.category,r.spec,r.unit].join(' ').toLowerCase().includes(kw))
       .sort((a,b)=>{
+        let result=0;
         if(mode==='category'){
-          const byCategory=compareText(a.category,b.category);
-          if(byCategory!==0)return byCategory;
+          result=compareText(a.category,b.category);
+          if(result===0)result=compareText(a.item_name,b.item_name);
+        }else{
+          result=compareText(a.item_name,b.item_name);
         }
-        return compareText(a.item_name,b.item_name);
+        return result*factor;
       });
   }
 
   function renderTable(){
     const body=document.getElementById('stocktakeBody');if(!body)return;
+    updateStocktakeSortHeaders();
     const rows=filteredRecords();
 
     const total=monthRecords.length;
@@ -769,6 +793,9 @@
 .stocktake-card{padding:14px}.stocktake-month-head{align-items:flex-start}.stocktake-card .section-head h3{margin:0;font-size:17px}
 .stocktake-table-wrap{position:relative;max-height:62vh;overflow:auto}.stocktake-table{min-width:960px}.stocktake-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important;white-space:nowrap;overflow:visible}
 .stocktake-table th:nth-child(n+4),.stocktake-table td:nth-child(n+4){text-align:center}
+.stocktake-sort-head{display:inline-flex;align-items:center;gap:5px;padding:0;background:none!important;border:0!important;color:#667085!important;font:inherit;font-weight:700;cursor:pointer;white-space:nowrap}
+.stocktake-sort-head:hover,.stocktake-sort-head.is-active{color:#173b5e!important}
+.stocktake-sort-arrow{font-size:10px;line-height:1;color:#98a2b3}.stocktake-sort-head.is-active .stocktake-sort-arrow{color:#173b5e}
 .stocktake-table td{overflow:hidden}.stocktake-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stocktake-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stocktake-col-resizer{position:absolute;right:-7px;top:0;width:14px;height:100%;z-index:20;cursor:col-resize;touch-action:none;user-select:none}
 .stocktake-col-resizer::after{content:"";position:absolute;left:6px;top:18%;width:2px;height:64%;border-radius:2px;background:#d7dde5;opacity:.35}
