@@ -55,6 +55,42 @@
   }
 
   function monthLabel(v){const [y,m]=String(v||'').split('-');return y&&m?`${y}年${Number(m)}月`:'';}
+
+  function setupGroupCollapse(groupCard){
+    if(!groupCard||document.getElementById('toggleOutNoteGroup'))return;
+    const head=groupCard.querySelector('.section-head');
+    const wrap=groupCard.querySelector('.out-note-summary-wrap');
+    if(!head||!wrap)return;
+
+    const hint=head.querySelector('.hint');
+    const right=document.createElement('div');
+    right.className='out-note-group-head-actions';
+    if(hint)right.appendChild(hint);
+
+    const btn=document.createElement('button');
+    btn.id='toggleOutNoteGroup';
+    btn.type='button';
+    btn.className='secondary out-note-group-toggle';
+    right.appendChild(btn);
+    head.appendChild(right);
+
+    const apply=collapsed=>{
+      wrap.classList.toggle('hidden',collapsed);
+      groupCard.classList.toggle('out-note-group-collapsed',collapsed);
+      btn.textContent=collapsed?'展开 ▾':'收起 ▴';
+      btn.setAttribute('aria-expanded',collapsed?'false':'true');
+    };
+
+    const saved=localStorage.getItem('outNoteGroupCollapsed')==='1';
+    apply(saved);
+    btn.onclick=e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      const next=!wrap.classList.contains('hidden');
+      localStorage.setItem('outNoteGroupCollapsed',next?'1':'0');
+      apply(next);
+    };
+  }
   function classifyRow(row){
     const action=(row.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
     if(['BORROW','RETURN','TRANSFER','ADJUST'].includes(action))return '';
@@ -119,6 +155,7 @@
       if(hint)hint.textContent='按用途分类合计';
       const head=groupCard.querySelector('thead tr');
       if(head)head.innerHTML='<th>用途分类</th><th>记录数</th><th>数量合计</th>';
+      setupGroupCollapse(groupCard);
     }
 
     const detailHead=document.querySelector('#outNotes .out-note-detail-wrap thead tr');
@@ -239,6 +276,10 @@
 .out-note-category-layout{display:grid;grid-template-columns:82px 44px;align-items:center;column-gap:4px;min-width:130px}
 .out-note-category-pill{display:inline-flex;align-items:center;justify-content:center;justify-self:start;border-radius:999px;background:#eef2f6;color:#344054;padding:4px 9px;font-size:12px;font-weight:700;white-space:nowrap}
 .out-note-category-edit{margin-left:0!important;width:44px;text-align:center}
+.out-note-group-head-actions{display:flex;align-items:center;gap:10px}
+.out-note-group-head-actions .hint{margin-top:0}
+.out-note-group-toggle{padding:6px 10px;font-size:12px;line-height:1;min-width:66px}
+.out-note-group-collapsed{padding-bottom:14px}
 #outNotes .out-note-detail-wrap table{min-width:1040px}
 @media(max-width:1450px){#outNoteFilters{grid-template-columns:repeat(4,minmax(145px,1fr))!important}.out-note-actions{grid-column:auto!important}}
 @media(max-width:1000px){#outNoteFilters{grid-template-columns:1fr 1fr!important}.out-note-actions{grid-column:1/-1!important}}
