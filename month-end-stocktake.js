@@ -265,7 +265,8 @@
 
     const logs=allInventoryLogs
       .filter(r=>{
-        if(String(r.item_id||'')!==String(item.id))return false;
+        const sameItem=String(r.item_id||'')===String(item.id)||(!r.item_id&&String(r.item_name||'')===String(item.name||''));
+        if(!sameItem)return false;
         if(dateOf(r)>cutoff)return false;
         if(String(r.action||'')==='ADJUST'&&monthlyMarker&&String(r.note||'').includes(monthlyMarker))return false;
         return true;
