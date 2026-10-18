@@ -77,7 +77,7 @@
     section.innerHTML=`
       <div class="out-note-head"><div><h2>出入库备注</h2><div class="hint">入库、出库、盘点或移库时，只要填写备注都会自动汇总到这里。</div></div><span id="outNoteCount"></span></div>
       <div id="outNoteFilters" class="card">
-        <label>饮料<select id="outNoteItemFilter"><option value="">全部饮料</option></select></label>
+        <label>饮料<input id="outNoteItemFilter" list="outNoteItemList" placeholder="全部饮料 / 输入名称搜索" autocomplete="off"><datalist id="outNoteItemList"></datalist></label>
         <label>操作<select id="outNoteActionFilter"><option value="">全部操作</option><option value="IN">入库</option><option value="OUT">出库</option><option value="BORROW">借出</option><option value="RETURN">还回</option><option value="ADJUST">盘点</option><option value="TRANSFER">移库</option></select></label>
         <label>开始日期<input id="outNoteDateFrom" type="date"></label>
         <label>结束日期<input id="outNoteDateTo" type="date"></label>
@@ -101,6 +101,7 @@
       renderRows();
     };
     document.getElementById('outNoteKeyword').addEventListener('keydown',e=>{if(e.key==='Enter')renderRows();});
+    document.getElementById('outNoteItemFilter').addEventListener('keydown',e=>{if(e.key==='Enter')renderRows();});
   }
 
   function extendNavigation(){
@@ -162,21 +163,23 @@
   }
 
   function populateItems(){
-    const sel=document.getElementById('outNoteItemFilter');if(!sel)return;
-    const current=sel.value;
-    const names=[...new Set(rows.map(r=>r.item_name).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
-    sel.innerHTML='<option value="">全部饮料</option>'+names.map(n=>`<option value="${h(n)}">${h(n)}</option>`).join('');
-    if(names.includes(current))sel.value=current;
+    const input=document.getElementById('outNoteItemFilter');
+    const list=document.getElementById('outNoteItemList');
+    if(!input||!list)return;
+    const current=input.value;
+    const names=[...new Set(rows.map(r=>r.item_name).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'zh-CN',{numeric:true,sensitivity:'base'}));
+    list.innerHTML=names.map(n=>`<option value="${h(n)}"></option>`).join('');
+    input.value=current;
   }
 
   function filteredRows(){
-    const item=document.getElementById('outNoteItemFilter')?.value||'';
+    const item=(document.getElementById('outNoteItemFilter')?.value||'').trim().toLowerCase();
     const action=document.getElementById('outNoteActionFilter')?.value||'';
     const from=document.getElementById('outNoteDateFrom')?.value||'';
     const to=document.getElementById('outNoteDateTo')?.value||'';
     const kw=(document.getElementById('outNoteKeyword')?.value||'').trim().toLowerCase();
     return rows.filter(r=>{
-      if(item&&r.item_name!==item)return false;
+      if(item&&!String(r.item_name||'').toLowerCase().includes(item))return false;
       if(action&&String(r.action)!==action)return false;
       if(from&&r._date<from)return false;
       if(to&&r._date>to)return false;
