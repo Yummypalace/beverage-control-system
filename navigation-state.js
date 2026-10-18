@@ -6,7 +6,7 @@
   let restored=false;
   let attempts=0;
   let pageGuardInstalled=false;
-  const PAGE_IDS=['dashboard','inventory','commission','logs','settings','outNotes','monthlyReconciliation','corrections'];
+  const PAGE_IDS=['dashboard','inventory','commission','logs','settings','outNotes','stocktakeAdjust','monthlyReconciliation','corrections'];
 
   function pageFromLink(link){
     const href=link&&link.getAttribute?link.getAttribute('href')||'':'';
@@ -59,7 +59,16 @@
     const link=e.target&&e.target.closest?e.target.closest('.side-nav a'):null;
     if(!link)return;
     const page=pageFromLink(link);
-    if(page)savePage(page);
+    if(!page)return;
+
+    // 先在捕获阶段把其他页面全部收起，避免各功能脚本加载顺序不同造成页面叠在一起。
+    PAGE_IDS.forEach(id=>{
+      if(id===page)return;
+      const el=document.getElementById(id);
+      if(el)el.style.display='none';
+    });
+
+    savePage(page);
   },true);
 
   // 页面真正离开/关闭时保存当前页，但切回来时不主动恢复、不重绘。
