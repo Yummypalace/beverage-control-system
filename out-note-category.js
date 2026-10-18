@@ -57,6 +57,7 @@
   function monthLabel(v){const [y,m]=String(v||'').split('-');return y&&m?`${y}年${Number(m)}月`:'';}
   function classifyRow(row){
     const action=(row.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
+    if(['BORROW','RETURN','TRANSFER','ADJUST'].includes(action))return '';
     const outType=(row.dataset.outType||'').trim();
     if(action==='OUT'){
       if(outType==='NORMAL')return '正常销售';
@@ -178,7 +179,7 @@
       td.dataset.category=classifyRow(tr);
       const action=(tr.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
       const edit=canEditOldOutType&&action==='OUT'?'<button class="out-note-category-edit secondary" style="margin-left:6px;padding:3px 7px;font-size:11px">修改</button>':'';
-      td.innerHTML=`<span class="out-note-category-pill">${td.dataset.category}</span>${edit}`;
+      td.innerHTML=td.dataset.category?`<span class="out-note-category-pill">${td.dataset.category}</span>${edit}`:'';
       const btn=td.querySelector('.out-note-category-edit');
       if(btn)btn.onclick=()=>editOldOutType(tr);
     });
@@ -218,7 +219,8 @@
 
     const groups=new Map();
     visible.forEach(tr=>{
-      const cat=tr.querySelector('.out-note-category-cell')?.dataset.category||'其他';
+      const cat=tr.querySelector('.out-note-category-cell')?.dataset.category||'';
+      if(!cat)return;
       const qty=Number((tr.querySelector('.out-note-qty-cell')?.textContent||'0').replace(/,/g,''))||0;
       const g=groups.get(cat)||{category:cat,count:0,qty:0};
       g.count++;g.qty+=qty;groups.set(cat,g);
