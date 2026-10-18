@@ -329,14 +329,36 @@
     document.querySelectorAll('.side-nav a').forEach(link=>{link.onclick=e=>{e.preventDefault();showPage(link.getAttribute('href').slice(1));};});
   }
 
-  async function fetchAll(table,configure){
-    const all=[];let from=0;const size=1000;
-    while(true){
-      let q=sb.from(table).select('*');q=configure(q);q=q.range(from,from+size-1);
-      const {data,error}=await q;if(error)throw error;
-      const page=data||[];all.push(...page);if(page.length<size)break;from+=size;
+  async function retryResult(task,attempts=3){
+    let last={data:null,error:new Error('请求失败')};
+    for(let i=0;i<attempts;i++){
+      try{
+        last=await task();
+        if(!last?.error)return last;
+      }catch(e){
+        last={data:null,error:e};
+      }
+      if(i<attempts-1)await new Promise(r=>setTimeout(r,220*(i+1)));
     }
-    return all;
+    return last;
+  }
+
+  async function fetchAll(table,configure,attempt=0){
+    try{
+      const all=[];let from=0;const size=1000;
+      while(true){
+        let q=sb.from(table).select('*');q=configure(q);q=q.range(from,from+size-1);
+        const {data,error}=await q;if(error)throw error;
+        const page=data||[];all.push(...page);if(page.length<size)break;from+=size;
+      }
+      return all;
+    }catch(e){
+      if(attempt<2){
+        await new Promise(r=>setTimeout(r,220*(attempt+1)));
+        return fetchAll(table,configure,attempt+1);
+      }
+      throw e;
+    }
   }
 
   async function recalculateFresh(){
@@ -344,7 +366,8 @@
     loading=true;
     const status=document.getElementById('reconStatus');
     const body=document.getElementById('reconInventoryBody');
-    if(body)body.innerHTML='<tr><td colspan="19">重新计算中...</td></tr>';
+    const hadData=allLogs.length>0||posRows.length>0||entActualRows.length>0;
+    if(body&&!hadData)body.innerHTML='<tr><td colspan="19">重新计算中...</td></tr>';
     if(status)status.textContent='重新计算中...';
     try{
       const [logs,pos,entActual]=await Promise.all([
@@ -361,8 +384,14 @@
       render(false,blankDraft);
       if(status)status.textContent='已重新计算';
     }catch(e){
-      if(body)body.innerHTML=`<tr><td colspan="19">重新计算失败：${h(e.message||e)}</td></tr>`;
-      if(status)status.textContent='重新计算失败';
+      console.warn('月结重新计算失败，保留现有资料',e);
+      if(hadData){
+        render(false,blankDraft);
+        if(status)status.textContent='重新计算失败，已保留现有资料';
+      }else{
+        if(body)body.innerHTML=`<tr><td colspan="19">重新计算失败：${h(e.message||e)}</td></tr>`;
+        if(status)status.textContent='重新计算失败';
+      }
     }finally{loading=false;}
   }
 
@@ -372,7 +401,8 @@
     loading=true;
     const status=document.getElementById('reconStatus');
     const body=document.getElementById('reconInventoryBody');
-    if(body)body.innerHTML='<tr><td colspan="19">读取中...</td></tr>';
+    const hadData=allLogs.length>0||posRows.length>0||entActualRows.length>0;
+    if(body&&!hadData)body.innerHTML='<tr><td colspan="19">读取中...</td></tr>';
     if(status)status.textContent='读取中...';
     try{
       const [logs,pos,entActual]=await Promise.all([
@@ -383,8 +413,14 @@
       allLogs=logs;posRows=pos;entActualRows=entActual;populateMonths();render(false,draft);
       if(status)status.textContent='已更新';
     }catch(e){
-      if(body)body.innerHTML=`<tr><td colspan="19">读取失败：${h(e.message||e)}</td></tr>`;
-      if(status)status.textContent='读取失败';
+      console.warn('月结资料读取失败，保留现有资料',e);
+      if(hadData){
+        render(false,draft);
+        if(status)status.textContent='读取失败，已保留现有资料';
+      }else{
+        if(body)body.innerHTML=`<tr><td colspan="19">读取失败：${h(e.message||e)}</td></tr>`;
+        if(status)status.textContent='读取失败';
+      }
     }finally{loading=false;}
   }
 
@@ -734,7 +770,7 @@
     const q=Number(raw);if(!Number.isFinite(q)||q<0)return;
     const monthAtSave=selectedMonth;
     const payload={month_key:monthAtSave,item_id:item.id,item_name:item.name,ent_actual:q,updated_by:typeof userEmail==='function'?userEmail():'',updated_at:new Date().toISOString()};
-    const {data,error}=await sb.from('monthly_ent_actual').upsert(payload,{onConflict:'month_key,item_id'}).select().single();
+    const {data,error}=await retryResult(()=>sb.from('monthly_ent_actual').upsert(payload,{onConflict:'month_key,item_id'}).select().single());
     if(error){console.error('ENT actual auto-save failed',error);return;}
     const idx=entActualRows.findIndex(r=>r.month_key===monthAtSave&&String(r.item_id)===itemId);
     if(idx>=0)entActualRows[idx]=data||payload;else entActualRows.push(data||payload);
@@ -924,10 +960,10 @@
       updated_at:new Date().toISOString()
     };
 
-    const {data,error}=await sb.from('monthly_pos_sales')
+    const {data,error}=await retryResult(()=>sb.from('monthly_pos_sales')
       .upsert(payload,{onConflict:'month_key,item_id'})
       .select()
-      .single();
+      .single());
 
     if(error){
       setAutoSaveStatus('自动保存失败','error');
@@ -991,7 +1027,7 @@
     setAutoSaveStatus('整月保存中…','saving');
     try{
       if(upserts.length){
-        const {error}=await sb.from('monthly_pos_sales').upsert(upserts,{onConflict:'month_key,item_id'});
+        const {error}=await retryResult(()=>sb.from('monthly_pos_sales').upsert(upserts,{onConflict:'month_key,item_id'}));
         if(error)throw error;
       }
       await loadData();
