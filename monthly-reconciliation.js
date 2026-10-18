@@ -102,27 +102,6 @@
     return next;
   }
 
-  function measureReconColumn(index){
-    const table=document.querySelector('#monthlyReconciliation .recon-table');
-    const host=document.getElementById('monthlyReconciliation');
-    if(!table||!host)return RECON_DEFAULT_WIDTHS[index]||80;
-    const cells=[...table.querySelectorAll(`tr > *:nth-child(${index+1})`)].slice(0,80);
-    let best=reconWidthLimits(index).min;
-
-    cells.forEach(cell=>{
-      const probe=document.createElement('div');
-      probe.className=cell.className||'';
-      probe.innerHTML=cell.innerHTML;
-      probe.querySelectorAll('.recon-col-resizer').forEach(x=>x.remove());
-      probe.style.cssText='position:fixed;left:-10000px;top:-10000px;visibility:hidden;width:max-content;min-width:0;max-width:none;white-space:nowrap;padding:10px 12px;box-sizing:border-box;';
-      host.appendChild(probe);
-      best=Math.max(best,Math.ceil(probe.getBoundingClientRect().width)+8);
-      probe.remove();
-    });
-
-    return clampReconWidth(index,best);
-  }
-
   function installReconColumnResize(){
     const table=document.querySelector('#monthlyReconciliation .recon-table');
     const wrap=document.querySelector('#monthlyReconciliation .recon-table-wrap');
@@ -142,7 +121,7 @@
       handle.className='recon-col-resizer';
       handle.setAttribute('role','separator');
       handle.setAttribute('aria-orientation','vertical');
-      handle.setAttribute('aria-label','拖动调整列宽，双击自动适应内容');
+      handle.setAttribute('aria-label','拖动调整列宽');
       th.appendChild(handle);
 
       handle.addEventListener('pointerdown',e=>{
@@ -203,14 +182,6 @@
         document.addEventListener('pointercancel',up);
       });
 
-      handle.addEventListener('dblclick',e=>{
-        e.preventDefault();
-        e.stopPropagation();
-        const width=measureReconColumn(index);
-        setReconColumnWidth(th,index,width,true);
-        th.classList.add('recon-autosized-col');
-        setTimeout(()=>th.classList.remove('recon-autosized-col'),500);
-      });
     });
   }
 
@@ -281,7 +252,6 @@
           <div id="reconMonthTitle" class="recon-month-title"></div>
           <div class="recon-table-meta">
             <span id="reconInventoryDateHint" class="hint"></span>
-            <span class="recon-resize-help">拖动列边界调整 · 双击自动适应</span>
           </div>
         </div>
         <div class="tablewrap recon-table-wrap">
@@ -1048,15 +1018,13 @@
 .recon-col-resizer::after{content:"";position:absolute;left:6px;top:18%;width:2px;height:64%;border-radius:2px;background:#d7dde5;opacity:.35;transition:opacity .15s,background .15s,width .15s,box-shadow .15s}
 .recon-col-resizer:hover::after,.recon-col-resizer.is-active::after{width:3px;background:#173b5e;opacity:.75;box-shadow:0 0 0 2px rgba(23,59,94,.08)}
 .recon-table thead th.recon-resizing-col{background:#edf3f8!important;box-shadow:inset -2px 0 0 rgba(23,59,94,.18)}
-.recon-table thead th.recon-autosized-col{animation:reconWidthFlash .45s ease}
-@keyframes reconWidthFlash{0%{background:#dfeaf4!important}100%{background:#f8fafc!important}}
 body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.recon-resizing *{cursor:col-resize!important}
 .recon-resize-guide{position:absolute;width:2px;background:#173b5e;opacity:.65;z-index:25;pointer-events:none;box-shadow:0 0 0 1px rgba(255,255,255,.7)}
 .recon-resize-bubble{position:absolute;z-index:26;pointer-events:none;background:#17324d;color:#fff;border-radius:7px;padding:4px 7px;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 .recon-table-head{position:relative;min-height:32px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}
-.recon-table-meta{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0}.recon-table-meta .hint{margin-top:0;white-space:nowrap}.recon-resize-help{font-size:11px;color:#98a2b3;white-space:nowrap}
+.recon-table-meta{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0}.recon-table-meta .hint{margin-top:0;white-space:nowrap}
 .recon-table-wrap{position:relative;max-height:64vh;overflow:auto}.recon-table{min-width:100%}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:92px;min-height:36px;padding:7px 8px}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
-@media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}.recon-resize-help{display:none}}
+@media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}}
 @media(max-width:620px){.recon-summary{grid-template-columns:1fr 1fr}.recon-control-actions{display:grid;grid-template-columns:1fr 1fr}.recon-control-actions button{width:100%}.recon-guide{display:block}.recon-guide b{display:block;margin-bottom:4px}}
 `;document.head.appendChild(s);
   }
