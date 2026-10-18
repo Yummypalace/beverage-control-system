@@ -6,7 +6,15 @@
   let restored=false;
   let attempts=0;
   let pageGuardInstalled=false;
-  const PAGE_IDS=['dashboard','inventory','commission','logs','settings','outNotes','stocktakeAdjust','monthlyReconciliation','corrections'];
+  function pageIds(){
+    const ids=new Set(['dashboard','inventory','commission','logs','settings']);
+    document.querySelectorAll('.side-nav a[href^="#"]').forEach(link=>{
+      const id=pageFromLink(link);
+      if(id)ids.add(id);
+    });
+    document.querySelectorAll('.content-area > [id]').forEach(el=>ids.add(el.id));
+    return [...ids];
+  }
 
   function pageFromLink(link){
     const href=link&&link.getAttribute?link.getAttribute('href')||'':'';
@@ -36,7 +44,7 @@
     const originalShowPage=showPage;
 
     showPage=function(page){
-      PAGE_IDS.forEach(id=>{
+      pageIds().forEach(id=>{
         if(id===page)return;
         const el=document.getElementById(id);
         if(el)el.style.display='none';
@@ -45,7 +53,7 @@
       originalShowPage(page);
 
       // 再确认一次，避免不同功能脚本互相包裹 showPage 时留下两个页面同时显示。
-      PAGE_IDS.forEach(id=>{
+      pageIds().forEach(id=>{
         const el=document.getElementById(id);if(!el)return;
         if(id!==page)el.style.display='none';
       });
@@ -62,7 +70,7 @@
     if(!page)return;
 
     // 先在捕获阶段把其他页面全部收起，避免各功能脚本加载顺序不同造成页面叠在一起。
-    PAGE_IDS.forEach(id=>{
+    pageIds().forEach(id=>{
       if(id===page)return;
       const el=document.getElementById(id);
       if(el)el.style.display='none';
