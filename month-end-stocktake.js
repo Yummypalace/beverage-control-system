@@ -10,6 +10,8 @@
   let monthRecords=[];
   let loading=false;
   let activeStocktakeId='';
+  const STOCKTAKE_SORT_KEY='monthlyStocktakeSortModeV1';
+  const STOCKTAKE_WIDTHS_KEY='monthlyStocktakeColumnWidthsV1';
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function num(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
@@ -76,6 +78,12 @@
           </label>
           <label>搜索饮料
             <input id="stocktakeSearch" placeholder="名称 / 类别 / 规格">
+          </label>
+          <label>排序
+            <select id="stocktakeSortMode">
+              <option value="name">按名称排序</option>
+              <option value="category">按类别排序</option>
+            </select>
           </label>
         </div>
         <div class="stocktake-toolbar-actions">
@@ -150,6 +158,12 @@
       await loadSelectedMonth();
     };
     document.getElementById('stocktakeSearch').oninput=renderTable;
+    const sortSel=document.getElementById('stocktakeSortMode');
+    sortSel.value=localStorage.getItem(STOCKTAKE_SORT_KEY)==='category'?'category':'name';
+    sortSel.onchange=()=>{
+      localStorage.setItem(STOCKTAKE_SORT_KEY,sortSel.value==='category'?'category':'name');
+      renderTable();
+    };
     document.getElementById('stocktakeRefresh').onclick=refreshPage;
   }
 
@@ -373,9 +387,22 @@
     }
   }
 
+  function compareText(a,b){
+    return String(a||'').localeCompare(String(b||''),'zh-CN',{numeric:true,sensitivity:'base'});
+  }
+
   function filteredRecords(){
     const kw=(document.getElementById('stocktakeSearch')?.value||'').trim().toLowerCase();
-    return monthRecords.filter(r=>!kw||[r.item_name,r.category,r.spec,r.unit].join(' ').toLowerCase().includes(kw));
+    const mode=document.getElementById('stocktakeSortMode')?.value==='category'?'category':'name';
+    return monthRecords
+      .filter(r=>!kw||[r.item_name,r.category,r.spec,r.unit].join(' ').toLowerCase().includes(kw))
+      .sort((a,b)=>{
+        if(mode==='category'){
+          const byCategory=compareText(a.category,b.category);
+          if(byCategory!==0)return byCategory;
+        }
+        return compareText(a.item_name,b.item_name);
+      });
   }
 
   function renderTable(){
@@ -428,7 +455,7 @@
       }
 
       return `<tr data-stocktake-id="${h(r.id)}">
-        <td><b>${h(r.item_name||'')}</b><div class="stocktake-sub">${h(r.spec||'')}</div></td>
+        <td class="stocktake-name-cell" title="${h(r.item_name||'')}"><b>${h(r.item_name||'')}</b><div class="stocktake-sub">${h(r.spec||'')}</div></td>
         <td>${h(r.category||'-')}</td>
         <td>${h(r.unit||'')}</td>
         <td>${sf}</td>
@@ -442,6 +469,113 @@
 
     body.querySelectorAll('tr[data-stocktake-id]').forEach(tr=>{
       tr.querySelector('.stocktake-adjust-row').onclick=()=>openDialog(tr.dataset.stocktakeId);
+    });
+    requestAnimationFrame(installStocktakeColumnResize);
+  }
+
+  function loadStocktakeWidths(){
+    try{
+      const value=JSON.parse(localStorage.getItem(STOCKTAKE_WIDTHS_KEY)||'[]');
+      return Array.isArray(value)?value:[];
+    }catch(e){return [];}
+  }
+
+  function saveStocktakeWidths(widths){
+    try{localStorage.setItem(STOCKTAKE_WIDTHS_KEY,JSON.stringify(widths));}catch(e){}
+  }
+
+  function measureStocktakeHeaderMin(th,index){
+    if(!th)return 54;
+    const cs=getComputedStyle(th);
+    const probe=document.createElement('span');
+    probe.textContent=String(th.textContent||'').replace(/\s+/g,' ').trim();
+    probe.style.cssText=[
+      'position:fixed','left:-10000px','top:-10000px','visibility:hidden',
+      'display:inline-block','width:max-content','white-space:nowrap',
+      'font-family:'+cs.fontFamily,'font-size:'+cs.fontSize,'font-weight:'+cs.fontWeight,
+      'letter-spacing:'+cs.letterSpacing,'padding-left:'+cs.paddingLeft,'padding-right:'+cs.paddingRight
+    ].join(';');
+    document.body.appendChild(probe);
+    const width=Math.ceil(probe.getBoundingClientRect().width+16);
+    probe.remove();
+    return Math.max(index===0?90:54,width);
+  }
+
+  function installStocktakeColumnResize(){
+    const table=document.querySelector('#stocktakeAdjust .stocktake-table');
+    const wrap=document.querySelector('#stocktakeAdjust .stocktake-table-wrap');
+    if(!table||!wrap||wrap.offsetWidth===0)return;
+
+    const heads=[...table.querySelectorAll('thead th')];
+    if(!heads.length)return;
+
+    let colgroup=table.querySelector('colgroup.stocktake-colgroup');
+    if(!colgroup){
+      colgroup=document.createElement('colgroup');
+      colgroup.className='stocktake-colgroup';
+      heads.forEach(()=>colgroup.appendChild(document.createElement('col')));
+      table.insertBefore(colgroup,table.firstChild);
+    }
+    const cols=[...colgroup.children];
+    const saved=loadStocktakeWidths();
+
+    // 第一次使用时沿用当前画面的实际宽度；以后读取用户上一次拖好的宽度。
+    const currentWidths=heads.map((th,index)=>{
+      const min=measureStocktakeHeaderMin(th,index);
+      th.dataset.stocktakeMinWidth=String(min);
+      const savedWidth=Number(saved[index]);
+      const natural=Math.round(th.getBoundingClientRect().width);
+      return Math.max(min,Number.isFinite(savedWidth)&&savedWidth>0?savedWidth:(natural||min));
+    });
+
+    currentWidths.forEach((width,index)=>cols[index].style.width=width+'px');
+    table.style.width=currentWidths.reduce((s,w)=>s+w,0)+'px';
+    table.style.minWidth='0';
+    table.style.tableLayout='fixed';
+
+    heads.forEach((th,index)=>{
+      if(th.querySelector('.stocktake-col-resizer'))return;
+      th.style.position='sticky';
+
+      const handle=document.createElement('span');
+      handle.className='stocktake-col-resizer';
+      handle.setAttribute('role','separator');
+      handle.setAttribute('aria-label','拖动调整列宽');
+      th.appendChild(handle);
+
+      handle.addEventListener('pointerdown',e=>{
+        if(e.button!==0)return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const startX=e.clientX;
+        const startWidth=parseFloat(cols[index].style.width)||th.getBoundingClientRect().width;
+        const min=Number(th.dataset.stocktakeMinWidth)||54;
+        const widths=cols.map(col=>parseFloat(col.style.width)||0);
+
+        handle.classList.add('is-active');
+        document.body.classList.add('stocktake-resizing');
+
+        const move=ev=>{
+          const next=Math.max(min,Math.round(startWidth+ev.clientX-startX));
+          cols[index].style.width=next+'px';
+          widths[index]=next;
+          table.style.width=widths.reduce((s,w)=>s+w,0)+'px';
+        };
+
+        const up=()=>{
+          document.removeEventListener('pointermove',move);
+          document.removeEventListener('pointerup',up);
+          document.removeEventListener('pointercancel',up);
+          handle.classList.remove('is-active');
+          document.body.classList.remove('stocktake-resizing');
+          saveStocktakeWidths(cols.map(col=>Math.round(parseFloat(col.style.width)||0)));
+        };
+
+        document.addEventListener('pointermove',move);
+        document.addEventListener('pointerup',up);
+        document.addEventListener('pointercancel',up);
+      });
     });
   }
 
@@ -633,9 +767,14 @@
 .stocktake-info{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#fff8e8;color:#7b5b16;font-size:13px;line-height:1.6}.stocktake-info b{white-space:nowrap}
 .stocktake-summary{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:10px;margin-bottom:12px}.stocktake-summary .card{padding:13px 14px}.stocktake-summary small{display:block;color:#667085}.stocktake-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
 .stocktake-card{padding:14px}.stocktake-month-head{align-items:flex-start}.stocktake-card .section-head h3{margin:0;font-size:17px}
-.stocktake-table-wrap{max-height:62vh;overflow:auto}.stocktake-table{min-width:960px}.stocktake-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
+.stocktake-table-wrap{position:relative;max-height:62vh;overflow:auto}.stocktake-table{min-width:960px}.stocktake-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important;white-space:nowrap;overflow:visible}
 .stocktake-table th:nth-child(n+4),.stocktake-table td:nth-child(n+4){text-align:center}
-.stocktake-adjust-row{padding:6px 10px;font-size:12px;white-space:nowrap}.stocktake-sub{font-size:11px;color:#98a2b3;margin-top:3px}
+.stocktake-table td{overflow:hidden}.stocktake-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stocktake-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stocktake-col-resizer{position:absolute;right:-7px;top:0;width:14px;height:100%;z-index:20;cursor:col-resize;touch-action:none;user-select:none}
+.stocktake-col-resizer::after{content:"";position:absolute;left:6px;top:18%;width:2px;height:64%;border-radius:2px;background:#d7dde5;opacity:.35}
+.stocktake-col-resizer:hover::after,.stocktake-col-resizer.is-active::after{width:3px;background:#173b5e;opacity:.8}
+body.stocktake-resizing,body.stocktake-resizing *{cursor:col-resize!important;user-select:none!important}
+.stocktake-adjust-row{padding:6px 10px;font-size:12px;white-space:nowrap}
 .monthly-stocktake-modal{width:min(620px,100%)}
 .monthly-stocktake-warning{padding:10px 12px;margin:-2px 0 14px;background:#fff8e8;border:1px solid #f4dfae;border-radius:10px;line-height:1.55;color:#7b5b16}
 .monthly-stocktake-name{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}.monthly-stocktake-name small{color:#667085}.monthly-stocktake-name b{font-size:18px;color:#102a43}
