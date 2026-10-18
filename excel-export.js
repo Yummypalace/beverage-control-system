@@ -31,7 +31,7 @@
   }
   function meaningfulBusinessNote(r){
     const action=String(r?.action||'');
-    if(r?.correction_ref||action==='CREATE'||action==='EDIT')return false;
+    if(r?.correction_ref||action==='CREATE'||action==='EDIT'||action==='ADJUST')return false;
     return !!parseBusinessNote(r).note;
   }
   function noteCategory(note){
