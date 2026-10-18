@@ -348,7 +348,7 @@
     showPage=function(page){
       const own=document.getElementById('monthlyReconciliation');
       if(page==='monthlyReconciliation'){
-        ['dashboard','inventory','commission','logs','settings','corrections','outNotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+        ['dashboard','inventory','commission','logs','settings','corrections','outNotes','stocktakeAdjust'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
         if(own)own.style.display='block';
         document.querySelectorAll('.side-nav a').forEach(link=>link.classList.toggle('active',link.getAttribute('href')==='#monthlyReconciliation'));
         window.scrollTo({top:0,behavior:'smooth'});loadData();return;
