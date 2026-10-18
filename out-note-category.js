@@ -10,10 +10,27 @@
   function currentMonth(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'}).slice(0,7);}
   async function checkAdminEditPermission(){
     try{
+      const {data:{session}}=await sb.auth.getSession();
+      if(!session){
+        canEditOldOutType=false;
+        decorateRows(true);
+        return;
+      }
       const {data,error}=await sb.rpc('is_app_admin');
       canEditOldOutType=!error&&data===true;
       decorateRows(true);
-    }catch(e){canEditOldOutType=false;}
+    }catch(e){
+      canEditOldOutType=false;
+      decorateRows(true);
+    }
+  }
+
+  function watchAdminEditPermission(){
+    if(window.__outNoteAdminPermissionWatcherInstalled)return;
+    window.__outNoteAdminPermissionWatcherInstalled=true;
+    sb.auth.onAuthStateChange((event,session)=>{
+      setTimeout(()=>checkAdminEditPermission(),120);
+    });
   }
 
   function outTypeLabel(v){
@@ -68,7 +85,9 @@
     addControls();
     addStyle();
     bindActions();
+    watchAdminEditPermission();
     checkAdminEditPermission();
+    setTimeout(()=>checkAdminEditPermission(),600);
     observer=new MutationObserver(()=>setTimeout(()=>{decorateRows();populateMonths();applyExtraFilters();},0));
     observer.observe(document.getElementById('outNoteBody'),{childList:true});
     setTimeout(()=>{decorateRows();populateMonths(true);applyExtraFilters();},100);
