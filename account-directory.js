@@ -52,17 +52,36 @@
     }
   }
 
+  async function readAccountWithRetry(columns,email){
+    let last={data:null,error:new Error('账号读取失败')};
+    for(let i=0;i<3;i++){
+      try{
+        last=await sb.from('app_accounts').select(columns).eq('email',email).maybeSingle();
+        if(!last.error)return last;
+      }catch(e){
+        last={data:null,error:e};
+      }
+      if(i<2)await new Promise(r=>setTimeout(r,220*(i+1)));
+    }
+    return last;
+  }
+
   async function ensureCurrentAccount(){
     const email=userEmail();if(!email)return;
-    const {data}=await sb.from('app_accounts').select('id,email,role,is_active').eq('email',email).maybeSingle();
+    const {data,error}=await readAccountWithRetry('id,email,role,is_active',email);
+    if(error){console.warn('账号目录暂时读取失败，不自动建立新账号',error);return;}
     if(data)return;
-    await sb.from('app_accounts').insert({email,role:'admin',is_active:true,created_by:email});
+    const created=await sb.from('app_accounts').insert({email,role:'admin',is_active:true,created_by:email});
+    if(created.error)console.warn('账号目录自动建立失败',created.error);
   }
 
   async function loadCurrentAccount(){
     const email=userEmail();if(!email)return;
-    const {data,error}=await sb.from('app_accounts').select('role,is_active').eq('email',email).maybeSingle();
-    if(error){console.error(error);currentRole='user';currentActive=true;return;}
+    const {data,error}=await readAccountWithRetry('role,is_active',email);
+    if(error){
+      console.warn('账号权限暂时读取失败，保留当前权限状态',error);
+      return;
+    }
     currentRole=data?.role||'user';
     currentActive=data?.is_active!==false;
     window.currentAppRole=currentRole;
@@ -116,10 +135,19 @@
     if(badge)badge.textContent=isAdmin?'Admin':'User';
   }
 
-  async function loadAccounts(){
+  async function loadAccounts(retry=0){
     const list=document.getElementById('accountDirectoryList');if(!list)return;
     const {data,error}=await sb.from('app_accounts').select('*').order('created_at',{ascending:false});
-    if(error){list.innerHTML='账号资料读取失败：'+esc(error.message);return;}
+    if(error){
+      if(retry<2){
+        await new Promise(r=>setTimeout(r,220*(retry+1)));
+        return loadAccounts(retry+1);
+      }
+      console.warn('账号资料读取失败，保留现有名单',error);
+      setMsg('账号资料读取失败，已保留现有名单',true);
+      if(!list.children.length)list.innerHTML='账号资料读取失败，请稍后重试。';
+      return;
+    }
     const rows=data||[];
     list.innerHTML=rows.map(x=>{const self=x.email.toLowerCase()===userEmail().toLowerCase();return `<div style="display:grid;grid-template-columns:minmax(190px,1fr) 105px 72px 82px 72px;align-items:center;gap:8px;padding:11px 0;border-bottom:1px solid #eee"><div><b style="color:#172033;overflow-wrap:anywhere">${esc(x.email)}</b><div style="font-size:11px;color:${x.is_active===false?'#c92a2a':'#087f5b'};margin-top:3px">${x.is_active===false?'已停用':'使用中'}${self?' · 当前账号':''}</div></div><select class="account-role-select" data-id="${x.id}" data-email="${esc(x.email)}"><option value="user" ${x.role==='user'?'selected':''}>User</option><option value="admin" ${x.role==='admin'?'selected':''}>Admin</option></select><button class="secondary account-role-save" data-id="${x.id}" data-email="${esc(x.email)}" style="padding:7px 8px">保存</button><button class="${x.is_active===false?'green':'red'} account-active-btn" data-id="${x.id}" data-email="${esc(x.email)}" data-active="${x.is_active!==false}" style="padding:7px 8px" ${self?'disabled title="当前账号不可停用"':''}>${x.is_active===false?'启用':'停用'}</button><button class="secondary account-delete-btn" data-id="${x.id}" data-email="${esc(x.email)}" style="padding:7px 8px" ${self?'disabled title="当前账号不可删除"':''}>删除</button></div>`;}).join('')||'暂无账号记录。';
     list.querySelectorAll('.account-role-save').forEach(btn=>btn.onclick=()=>saveRole(btn));
