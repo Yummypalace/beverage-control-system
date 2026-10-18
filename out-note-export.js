@@ -50,7 +50,7 @@
     return visibleRows().map(tr=>({
       '日期':txt(tr.querySelector('.out-note-date-cell')),
       '饮料':txt(tr.querySelector('.out-note-item-cell')),
-      '用途分类':txt(tr.querySelector('.out-note-category-cell'))||'其他',
+      '用途分类':txt(tr.querySelector('.out-note-category-cell')),
       '操作':txt(tr.querySelector('.out-note-action-cell')),
       '数量':num(txt(tr.querySelector('.out-note-qty-cell'))),
       '位置':txt(tr.querySelector('.out-note-location-cell')),
@@ -62,7 +62,8 @@
   function summaryRows(details){
     const groups=new Map();
     details.forEach(r=>{
-      const key=r['用途分类']||'其他';
+      const key=r['用途分类']||'';
+      if(!key)return;
       const g=groups.get(key)||{'用途分类':key,'记录数':0,'数量合计':0};
       g['记录数']+=1;
       g['数量合计']+=Number(r['数量']||0);
