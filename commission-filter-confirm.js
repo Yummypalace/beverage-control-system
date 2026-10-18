@@ -50,6 +50,8 @@ function protectRender(){
 function install(){
   if(installed)return;installed=true;
   ['commissionSellerFilter','commissionItemFilter','commissionDateFrom','commissionDateTo'].forEach(cloneControl);
+  const itemSearch=el('commissionItemFilter');
+  if(itemSearch)itemSearch.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();applyFilters();}});
   applied=readControls();
   window.getAppliedCommissionFilters=()=>({...applied});
 
