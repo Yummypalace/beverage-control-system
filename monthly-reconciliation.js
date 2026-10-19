@@ -555,7 +555,10 @@
 
     if(save)save.disabled=locked||isCurrent;
     if(clear)clear.disabled=locked||isCurrent;
-    if(auto&&locked){auto.textContent='月份已锁定';auto.dataset.state='saved';}
+    if(auto){
+      if(locked){auto.textContent='月份已锁定';auto.dataset.state='saved';}
+      else if(auto.textContent==='月份已锁定'){auto.textContent='POS 自动保存';auto.dataset.state='';}
+    }
   }
 
   async function flushPendingBeforeLock(){
