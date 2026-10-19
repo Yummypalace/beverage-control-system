@@ -16,6 +16,7 @@
   const pendingPosSaves=new Map();
   const entSaveTimers=new Map();
   const reviewNoteTimers=new Map();
+  const staleReviewClearing=new Set();
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function num(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
@@ -227,7 +228,7 @@
   }
 
   function wait(){
-    if(typeof sb==='undefined'||typeof showPage!=='function'||typeof items==='undefined'||!document.querySelector('.side-nav')||!document.querySelector('.content-area')){
+    if(typeof sb==='undefined'||typeof showPage!=='function'||typeof items==='undefined'||!window.InventoryHistoryEngine||!document.querySelector('.side-nav')||!document.querySelector('.content-area')){
       setTimeout(wait,150);return;
     }
     install();
@@ -510,107 +511,32 @@
     select.value=selectedMonth;
   }
 
+  function historyItems(){
+    return typeof allItems!=='undefined'&&Array.isArray(allItems)?allItems:items;
+  }
+
   function snapshotAt(cutoff){
-    const states=new Map();
-    const logsByItem=new Map();
-
-    allLogs.forEach(r=>{
-      const key=String(r.item_id||'');
-      if(!logsByItem.has(key))logsByItem.set(key,[]);
-      logsByItem.get(key).push(r);
-    });
-
-    items.forEach(item=>{
-      const key=String(item.id);
-      const logs=logsByItem.get(key)||[];
-      const eligible=logs.filter(r=>dateOf(r)<=cutoff);
-
-      const anchors=eligible
-        .filter(r=>{
-          const action=String(r.action||'');
-          if(action==='CREATE')return true;
-          if(action==='EDIT')return parseEdit(r.note).after!==null;
-          return false;
-        })
-        .sort(forwardCreatedSort);
-
-      if(anchors.length){
-        const base=anchors[0];
-        const baseAction=String(base.action||'');
-        const baseEdit=baseAction==='EDIT'?parseEdit(base.note):null;
-        const anchor=String(base.created_at||'');
-        const state={
-          total:baseAction==='CREATE'?parseCreateTotal(base.note,base.quantity):num(baseEdit.after),
-          exists:true,
-          uncertain:false
-        };
-
-        eligible
-          .filter(r=>r!==base&&String(r.created_at||'')>=anchor)
-          .sort(forwardCreatedSort)
-          .forEach(r=>{
-            const q=num(r.quantity);
-            const action=String(r.action||'');
-            const note=String(r.note||'');
-
-            if(action==='CREATE')return;
-            if(action==='IN'||action==='RETURN')state.total+=q;
-            else if(action==='OUT'||action==='BORROW')state.total-=q;
-            else if(action==='TRANSFER')return;
-            else if(action==='EDIT'){
-              const p=parseEdit(note);
-              if(p.after!==null)state.total=p.after;
-              else state.uncertain=true;
-            }else if(action==='ADJUST'){
-              const p=parseAdjust(note);
-              if(p.before!==null&&p.after!==null)state.total+=p.after-p.before;
-              else state.uncertain=true;
-            }
-          });
-
-        states.set(key,state);
-        return;
-      }
-
-      // 如果产品是在截点之后才建立，则截点当时本来就不存在，不属于“需核对旧记录”。
-      const futureCreate=logs
-        .filter(r=>String(r.action||'')==='CREATE'&&dateOf(r)>cutoff)
-        .sort((a,b)=>dateOf(a).localeCompare(dateOf(b))||forwardCreatedSort(a,b))[0];
-      if(futureCreate){
-        states.set(key,{total:0,exists:false,uncertain:false});
-        return;
-      }
-
-      // 没有可用 CREATE / EDIT 基准的真正旧品项，才使用当前库存倒推作为兼容兜底。
-      const state={total:num(item.fridge_quantity)+num(item.warehouse_quantity),exists:true,uncertain:true};
-      logs.filter(r=>dateOf(r)>cutoff).sort(reverseLogSort).forEach(r=>{
-        const q=num(r.quantity),action=String(r.action||''),note=String(r.note||'');
-        if(action==='IN'||action==='RETURN')state.total-=q;
-        else if(action==='OUT'||action==='BORROW')state.total+=q;
-        else if(action==='CREATE'){state.total=0;state.exists=false;}
-        else if(action==='EDIT'){
-          const p=parseEdit(note);if(p.before!==null)state.total=p.before;
-        }else if(action==='ADJUST'){
-          const p=parseAdjust(note);
-          if(p.before!==null&&p.after!==null)state.total-=p.after-p.before;
-        }
-      });
-      states.set(key,state);
-    });
-
-    return states;
+    return window.InventoryHistoryEngine.snapshotAt(
+      historyItems(),
+      allLogs,
+      cutoff,
+      {excludeStocktakeAdjustments:false}
+    );
   }
 
   function monthStats(){
     const map=new Map();
+    const resolver=window.InventoryHistoryEngine.createResolver(historyItems());
     function ensure(id){
       const key=String(id||'');
       if(!map.has(key))map.set(key,{inbound:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0});
       return map.get(key);
     }
     allLogs.forEach(r=>{
-      if(monthOf(r)!==selectedMonth||!r.item_id)return;
-      const s=ensure(r.item_id);
+      if(monthOf(r)!==selectedMonth)return;
+      const resolvedId=resolver.resolve(r);
+      if(!resolvedId)return;
+      const s=ensure(resolvedId);
       const action=String(r.action||''),q=num(r.quantity);
 
       if(r.correction_ref)return;
@@ -657,17 +583,43 @@
     });
   }
 
+  function normalizedReviewNumber(v){
+    return v===null||v===undefined?'':String(clean(v));
+  }
+
+  function reconciliationSignature(values){
+    return [
+      normalizedReviewNumber(values.opening),
+      normalizedReviewNumber(values.closing),
+      normalizedReviewNumber(values.inbound),
+      normalizedReviewNumber(values.sold),
+      normalizedReviewNumber(values.posValue),
+      normalizedReviewNumber(values.foc),
+      normalizedReviewNumber(values.kitchen),
+      normalizedReviewNumber(values.noPaid),
+      normalizedReviewNumber(values.cancelIn),
+      normalizedReviewNumber(values.borrow),
+      normalizedReviewNumber(values.returned),
+      normalizedReviewNumber(values.other),
+      normalizedReviewNumber(values.diff),
+      String(values.note||'').trim()
+    ].join('|');
+  }
+
   function computeRows(draftPos){
     const open=snapshotAt(previousMonthEnd(selectedMonth));
     const close=snapshotAt(monthEnd(selectedMonth));
     const stats=monthStats();
     const pmap=posMap();
     const rmap=reviewMap();
+    const sourceItems=historyItems();
+    const closeCutoff=monthEnd(selectedMonth);
 
-    const rows=[...items].map(item=>{
-      const s=stats.get(String(item.id))||{inbound:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0};
-      const openState=open.get(String(item.id));
-      const closeState=close.get(String(item.id));
+    const rows=sourceItems.map(item=>{
+      const key=String(item.id);
+      const s=stats.get(key)||{inbound:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0};
+      const openState=open.get(key);
+      const closeState=close.get(key);
       const opening=openState&&openState.exists?num(openState.total):0;
       const closing=selectedMonth===currentMonth()
         ? num(item.fridge_quantity)+num(item.warehouse_quantity)
@@ -684,21 +636,40 @@
         posValue=saved?num(saved.pos_quantity):(monthHasSavedPos?0:null);
       }
 
-      const entSaved=entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_id)===String(item.id))
+      const entSaved=entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_id)===key)
         || entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_name||'')===String(item.name||''));
       const entActualValue=entSaved?num(entSaved.ent_actual):0;
       const entDiff=clean(entActualValue-s.ent);
 
       const explained=posValue===null?null:posValue+s.foc+s.kitchen+s.noPaid+s.cancelIn+s.other+s.borrow-s.returned;
-      const diff=explained===null?null:explained-sold;
-      const uncertain=!!(openState?.uncertain||closeState?.uncertain);
-      const review=rmap.get(String(item.id)+'|'+String(selectedMonth))
+      const diff=explained===null?null:clean(explained-sold);
+      const uncertain=!!(openState?.totalUncertain||closeState?.totalUncertain);
+      const review=rmap.get(key+'|'+String(selectedMonth))
         || reviewRows.find(x=>x.month_key===selectedMonth&&String(x.item_name||'')===String(item.name||''))
         || null;
       const reviewNote=review?.note||'';
-      const manualOk=!!review?.manual_ok;
-      return {item,...s,opening,closing,sold,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,manualOk};
-    });
+      const reviewable=!uncertain&&diff!==null&&Math.abs(num(diff))>0.000001;
+      const reviewSignature=reconciliationSignature({opening,closing,inbound:s.inbound,sold,posValue,foc:s.foc,kitchen:s.kitchen,noPaid:s.noPaid,cancelIn:s.cancelIn,borrow:s.borrow,returned:s.returned,other:s.other,diff,note:reviewNote});
+      const storedManualOk=!!review?.manual_ok;
+      const confirmedDiff=review?.confirmed_diff;
+      const signatureMatches=String(review?.confirmed_signature||'')===reviewSignature;
+      const diffMatches=confirmedDiff!==null&&confirmedDiff!==undefined&&Math.abs(num(confirmedDiff)-num(diff))<0.000001;
+      const manualOk=storedManualOk&&reviewable&&String(reviewNote).trim()!==''&&signatureMatches&&diffMatches;
+      const manualOkStale=storedManualOk&&!manualOk;
+
+      const hasMonthData=stats.has(key)
+        ||posRows.some(r=>r.month_key===selectedMonth&&String(r.item_id)===key)
+        ||entActualRows.some(r=>r.month_key===selectedMonth&&String(r.item_id)===key)
+        ||reviewRows.some(r=>r.month_key===selectedMonth&&String(r.item_id)===key);
+      const relevant=item.is_active!==false
+        ||window.InventoryHistoryEngine.itemRelevantAt(item,closeState,closeCutoff,allLogs,sourceItems)
+        ||Math.abs(opening)>0.000001
+        ||Math.abs(closing)>0.000001
+        ||hasMonthData;
+      if(!relevant)return null;
+
+      return {item,...s,opening,closing,sold,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
+    }).filter(Boolean);
 
     rows.sort((a,b)=>{
       const av=reconSortKey==='category'?String(a.item.category||''):String(a.item.name||'');
