@@ -366,7 +366,7 @@
     if(status)status.textContent='读取中...';
     try{
       await refreshSelectedMonthLock();
-      await ensureMonthSnapshot();
+      if(!selectedMonthLocked)await ensureMonthSnapshot();
       await fetchMonthRecords();
       renderTable();
       renderHistory();
