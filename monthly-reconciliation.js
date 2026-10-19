@@ -644,7 +644,7 @@
     const resolver=window.InventoryHistoryEngine.createResolver(historyItems());
     function ensure(id){
       const key=String(id||'');
-      if(!map.has(key))map.set(key,{inbound:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0});
+      if(!map.has(key))map.set(key,{inbound:0,initialStock:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0});
       return map.get(key);
     }
     allLogs.forEach(r=>{
@@ -656,6 +656,13 @@
 
       if(r.correction_ref)return;
 
+      // 新增饮料若带有期初库存，这批库存属于该饮料建立当月的库存增加。
+      // 只采用带 item_id 的 CREATE，避免旧的同名孤立记录被错误套到后来新建的饮料。
+      // 同一 item 若历史上意外出现多笔 CREATE，则保留本月最后一笔作为建立库存锚点。
+      if(action==='CREATE'&&r.item_id){
+        s.initialStock=parseCreateTotal(r.note,q);
+        return;
+      }
       if(action==='IN'){s.inbound+=q;return;}
       if(action==='BORROW'){s.borrow+=q;return;}
       if(action==='RETURN'){s.returned+=q;return;}
@@ -732,14 +739,17 @@
 
     const rows=sourceItems.map(item=>{
       const key=String(item.id);
-      const s=stats.get(key)||{inbound:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0};
+      const s=stats.get(key)||{inbound:0,initialStock:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0};
       const openState=open.get(key);
       const closeState=close.get(key);
       const opening=openState&&openState.exists?num(openState.total):0;
+      // 上月还不存在的新品，本月 CREATE 的期初库存要计入“本月入库”。
+      // 已经有上月结存的旧品，即使历史资料里还有重复 CREATE，也不能重复增加。
+      const inbound=clean(s.inbound+((!openState||!openState.exists)?num(s.initialStock):0));
       const closing=selectedMonth===currentMonth()
         ? num(item.fridge_quantity)+num(item.warehouse_quantity)
         : (closeState&&closeState.exists?num(closeState.total):0);
-      const sold=opening+s.inbound-closing;
+      const sold=clean(opening+inbound-closing);
 
       let posValue=null;
       if(draftPos&&Object.prototype.hasOwnProperty.call(draftPos,item.id)){
@@ -764,7 +774,7 @@
         || null;
       const reviewNote=review?.note||'';
       const reviewable=!uncertain&&diff!==null&&Math.abs(num(diff))>0.000001;
-      const reviewSignature=reconciliationSignature({opening,closing,inbound:s.inbound,sold,posValue,foc:s.foc,kitchen:s.kitchen,noPaid:s.noPaid,cancelIn:s.cancelIn,borrow:s.borrow,returned:s.returned,other:s.other,diff,note:reviewNote});
+      const reviewSignature=reconciliationSignature({opening,closing,inbound,sold,posValue,foc:s.foc,kitchen:s.kitchen,noPaid:s.noPaid,cancelIn:s.cancelIn,borrow:s.borrow,returned:s.returned,other:s.other,diff,note:reviewNote});
       const storedManualOk=!!review?.manual_ok;
       const confirmedDiff=review?.confirmed_diff;
       const signatureMatches=String(review?.confirmed_signature||'')===reviewSignature;
@@ -783,7 +793,7 @@
         ||hasMonthData;
       if(!relevant)return null;
 
-      return {item,...s,opening,closing,sold,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
+      return {item,...s,inbound,opening,closing,sold,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
     }).filter(Boolean);
 
     rows.sort((a,b)=>{
