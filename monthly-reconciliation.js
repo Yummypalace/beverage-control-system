@@ -453,7 +453,7 @@
       reviewRows=reviews;
       populateMonths();
       const blankDraft={};
-      items.forEach(item=>blankDraft[item.id]='');
+      computeRows().forEach(r=>blankDraft[r.item.id]='');
       render(false,blankDraft);
       if(status)status.textContent='已重新计算';
     }catch(e){
@@ -756,7 +756,7 @@
         <td>${diffText(r.diff,r.uncertain)}</td>
         <td>${statusText(r)}</td>
         <td><input class="recon-review-note" data-item-id="${h(r.item.id)}" value="${h(r.reviewNote)}" placeholder="填写核对原因"></td>
-        <td><button type="button" class="recon-manual-ok ${r.manualOk?'is-ok':''}" data-item-id="${h(r.item.id)}">${r.manualOk?'OK ✓':'选择 OK'}</button></td>
+        <td>${r.reviewable?`<button type="button" class="recon-manual-ok ${r.manualOk?'is-ok':''}" data-item-id="${h(r.item.id)}">${r.manualOk?'OK ✓':'选择 OK'}</button>`:'<span class="recon-muted">—</span>'}</td>
       </tr>`;
     }).join('')||'<tr><td colspan="21">暂无饮料资料</td></tr>';
 
@@ -780,7 +780,19 @@
 
     document.querySelectorAll('#reconInventoryBody .recon-review-note').forEach(input=>{
       input.addEventListener('input',()=>{
-        updateReviewLocal(input.dataset.itemId,{note:input.value});
+        const itemId=String(input.dataset.itemId||'');
+        const existing=reviewRows.find(r=>r.month_key===selectedMonth&&String(r.item_id)===itemId);
+        const changes={note:input.value};
+        if(existing?.manual_ok&&String(existing.note||'')!==String(input.value||'')){
+          changes.manual_ok=false;
+          changes.confirmed_diff=null;
+          changes.confirmed_signature=null;
+          changes.confirmed_at=null;
+          changes.confirmed_by='';
+          const btn=document.querySelector('.recon-manual-ok[data-item-id="'+itemId+'"]');
+          if(btn){btn.classList.remove('is-ok');btn.textContent='选择 OK';}
+        }
+        updateReviewLocal(itemId,changes);
         renderReviewDetails();
         scheduleReviewNoteSave(input);
       });
@@ -800,6 +812,7 @@
     // 顶部汇总始终显示所选月份的全部产品总数，不受搜索或排序影响。
     updateSummary(allRows);
     renderReviewDetails(allRows);
+    clearStaleManualOks(allRows);
   }
 
   function reviewSystemStatus(r){
@@ -870,7 +883,7 @@
   async function saveEntActual(input){
     if(!input||!input.dataset.itemId)return;
     const itemId=String(input.dataset.itemId);
-    const item=items.find(x=>String(x.id)===itemId);if(!item)return;
+    const item=historyItemById(itemId);if(!item)return;
     const raw=String(input.value||'').trim();if(raw==='')return;
     const q=Number(raw);if(!Number.isFinite(q)||q<0)return;
     const monthAtSave=selectedMonth;
@@ -886,10 +899,18 @@
     return reviewRows.findIndex(r=>r.month_key===month&&String(r.item_id)===String(itemId));
   }
 
+  function historyItemById(itemId){
+    return historyItems().find(x=>String(x.id)===String(itemId));
+  }
+
   function updateReviewLocal(itemId,changes,month=selectedMonth){
-    const item=items.find(x=>String(x.id)===String(itemId));if(!item)return;
+    const item=historyItemById(itemId);if(!item)return;
     const idx=reviewIndex(itemId,month);
-    const base=idx>=0?reviewRows[idx]:{month_key:month,item_id:item.id,item_name:item.name,note:'',manual_ok:false,updated_by:'',updated_at:null};
+    const base=idx>=0?reviewRows[idx]:{
+      month_key:month,item_id:item.id,item_name:item.name,note:'',manual_ok:false,
+      confirmed_diff:null,confirmed_signature:null,confirmed_at:null,confirmed_by:'',
+      updated_by:'',updated_at:null
+    };
     const next={...base,...changes};
     if(idx>=0)reviewRows[idx]=next;else reviewRows.push(next);
   }
@@ -905,15 +926,35 @@
   }
 
   async function saveReview(itemId,changes){
-    const item=items.find(x=>String(x.id)===String(itemId));if(!item)return false;
+    const item=historyItemById(itemId);if(!item)return false;
     const monthAtSave=selectedMonth;
     const existing=reviewRows.find(r=>r.month_key===monthAtSave&&String(r.item_id)===String(itemId));
+    const nextNote=Object.prototype.hasOwnProperty.call(changes,'note')?String(changes.note||''):String(existing?.note||'');
+    const noteChanged=Object.prototype.hasOwnProperty.call(changes,'note')&&nextNote!==String(existing?.note||'');
+
+    let manualOk=Object.prototype.hasOwnProperty.call(changes,'manual_ok')?!!changes.manual_ok:!!existing?.manual_ok;
+    let confirmedDiff=Object.prototype.hasOwnProperty.call(changes,'confirmed_diff')?changes.confirmed_diff:(existing?.confirmed_diff??null);
+    let confirmedSignature=Object.prototype.hasOwnProperty.call(changes,'confirmed_signature')?changes.confirmed_signature:(existing?.confirmed_signature||null);
+    let confirmedAt=Object.prototype.hasOwnProperty.call(changes,'confirmed_at')?changes.confirmed_at:(existing?.confirmed_at||null);
+    let confirmedBy=Object.prototype.hasOwnProperty.call(changes,'confirmed_by')?String(changes.confirmed_by||''):String(existing?.confirmed_by||'');
+
+    if(noteChanged&&existing?.manual_ok&&!Object.prototype.hasOwnProperty.call(changes,'manual_ok')){
+      manualOk=false;confirmedDiff=null;confirmedSignature=null;confirmedAt=null;confirmedBy='';
+    }
+    if(!manualOk){
+      confirmedDiff=null;confirmedSignature=null;confirmedAt=null;confirmedBy='';
+    }
+
     const payload={
       month_key:monthAtSave,
       item_id:item.id,
       item_name:item.name,
-      note:Object.prototype.hasOwnProperty.call(changes,'note')?String(changes.note||''):String(existing?.note||''),
-      manual_ok:Object.prototype.hasOwnProperty.call(changes,'manual_ok')?!!changes.manual_ok:!!existing?.manual_ok,
+      note:nextNote,
+      manual_ok:manualOk,
+      confirmed_diff:confirmedDiff,
+      confirmed_signature:confirmedSignature,
+      confirmed_at:confirmedAt,
+      confirmed_by:confirmedBy,
       updated_by:typeof userEmail==='function'?userEmail():'',
       updated_at:new Date().toISOString()
     };
@@ -930,22 +971,76 @@
     return true;
   }
 
+  async function clearStaleManualOks(rows){
+    const stale=(rows||[]).filter(r=>r.manualOkStale);
+    stale.forEach(async r=>{
+      const key=selectedMonth+'|'+String(r.item.id);
+      if(staleReviewClearing.has(key))return;
+      staleReviewClearing.add(key);
+      try{
+        const {error}=await sb.from('monthly_reconciliation_review')
+          .update({
+            manual_ok:false,
+            confirmed_diff:null,
+            confirmed_signature:null,
+            confirmed_at:null,
+            confirmed_by:'',
+            updated_at:new Date().toISOString()
+          })
+          .eq('month_key',selectedMonth)
+          .eq('item_id',r.item.id);
+        if(!error)updateReviewLocal(r.item.id,{
+          manual_ok:false,
+          confirmed_diff:null,
+          confirmed_signature:null,
+          confirmed_at:null,
+          confirmed_by:''
+        });
+      }catch(e){
+        console.warn('过期人工确认自动取消失败',e);
+      }finally{
+        staleReviewClearing.delete(key);
+      }
+    });
+  }
+
   async function toggleManualOk(itemId){
     const row=computeRows(draftFromInputs()).find(r=>String(r.item.id)===String(itemId));
     if(!row)return;
+
+    if(!row.reviewable){
+      alert('只有系统状态为 CHECK、并且存在实际对账差异时，才需要人工确认 OK。');
+      return;
+    }
+
     const next=!row.manualOk;
     if(next&&!String(row.reviewNote||'').trim()){
       const input=document.querySelector('.recon-review-note[data-item-id="'+String(itemId)+'"]');
-      if(input&&!String(input.value||'').trim()){
-        input.focus();
-        alert('请先填写备注说明为什么这笔差异可以确认 OK。');
-        return;
-      }
+      if(input)input.focus();
+      alert('请先填写备注说明为什么这笔差异可以确认 OK。');
+      return;
     }
-    updateReviewLocal(itemId,{manual_ok:next});
-    const ok=await saveReview(itemId,{manual_ok:next});
+
+    const now=new Date().toISOString();
+    const who=typeof userEmail==='function'?userEmail():'';
+    const changes=next?{
+      manual_ok:true,
+      confirmed_diff:clean(row.diff),
+      confirmed_signature:row.reviewSignature,
+      confirmed_at:now,
+      confirmed_by:who
+    }:{
+      manual_ok:false,
+      confirmed_diff:null,
+      confirmed_signature:null,
+      confirmed_at:null,
+      confirmed_by:''
+    };
+
+    updateReviewLocal(itemId,changes);
+    const ok=await saveReview(itemId,changes);
     if(!ok){
-      updateReviewLocal(itemId,{manual_ok:!next});
+      await loadData();
       alert('人工确认保存失败，请重试。');
       return;
     }
@@ -1186,7 +1281,8 @@
 
     // 保存按钮用于“整月一次性确认”：
     // 已填写的沿用输入值；未录入的所有产品统一保存为 0。
-    for(const item of items){
+    const monthItems=computeRows(draft).map(r=>r.item);
+    for(const item of monthItems){
       const raw=Object.prototype.hasOwnProperty.call(draft,item.id)?String(draft[item.id]).trim():'';
       const q=raw===''?0:Number(raw);
       if(!Number.isFinite(q)||q<0)return alert(`${item.name} 的 POS 数量不正确`);
