@@ -186,5 +186,6 @@ begin
 end;
 $$;
 
-revoke all on function public.hard_delete_inventory_item(uuid) from public;
+revoke execute on function public.hard_delete_inventory_item(uuid) from anon;
+revoke execute on function public.hard_delete_inventory_item(uuid) from public;
 grant execute on function public.hard_delete_inventory_item(uuid) to authenticated;
