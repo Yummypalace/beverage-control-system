@@ -40,7 +40,7 @@
   function user(){return typeof userEmail==='function'?userEmail():'';}
 
   function wait(){
-    if(typeof sb==='undefined'||typeof items==='undefined'||typeof loadAll!=='function'||typeof showPage!=='function'||!document.querySelector('.side-nav')||!document.querySelector('.content-area')){
+    if(typeof sb==='undefined'||typeof items==='undefined'||typeof loadAll!=='function'||typeof showPage!=='function'||!window.InventoryHistoryEngine||!document.querySelector('.side-nav')||!document.querySelector('.content-area')){
       setTimeout(wait,150);return;
     }
     install();
@@ -260,61 +260,21 @@
     return loc?{location:loc,after:m?num(m[1]):num(quantity)}:null;
   }
 
-  // 月末库存按“实际录入顺序”正推，而不是按 operation_date 重排。
-  // 原因：系统允许补录历史日期；例如 8/27 才补录 8/25 的入库，
-  // 如果硬按业务日期重排，会把后来的补录错误地放到旧 EDIT 之前，导致历史库存出现负数。
+  // 月末系统库存统一使用共享历史引擎正推。
+  // 当前月份自己的“月底盘点调整”要排除，才能保留调整前的系统基准；
+  // 之前月份已经确认的盘点调整则会继续带入后续月份。
+  function historyItems(){
+    return typeof allItems!=='undefined'&&Array.isArray(allItems)?allItems:items;
+  }
+
   function snapshotForItem(item,cutoff){
-    let fridge=0,warehouse=0,exists=false;
-    const cutoffMonth=String(cutoff||'').slice(0,7);
-    const parts=cutoffMonth.split('-');
-    const monthlyMarker=parts.length===2?(Number(parts[0])+'年'+Number(parts[1])+'月月底盘点'):'';
-
-    const logs=allInventoryLogs
-      .filter(r=>{
-        const sameItem=String(r.item_id||'')===String(item.id)||(!r.item_id&&String(r.item_name||'')===String(item.name||''));
-        if(!sameItem)return false;
-        if(dateOf(r)>cutoff)return false;
-        if(String(r.action||'')==='ADJUST'&&monthlyMarker&&String(r.note||'').includes(monthlyMarker))return false;
-        return true;
-      })
-      .sort((a,b)=>{
-        const ca=String(a.created_at||''),cb=String(b.created_at||'');
-        if(ca!==cb)return ca.localeCompare(cb);
-        return Number(a.id||0)-Number(b.id||0);
-      });
-
-    for(const r of logs){
-      const action=String(r.action||''),q=num(r.quantity),note=String(r.note||''),loc=parseLocation(note);
-
-      if(action==='CREATE'){
-        const p=parsePair(note,false);
-        fridge=p?p.fridge:0;
-        warehouse=p?p.warehouse:0;
-        exists=true;
-        continue;
-      }
-      if(!exists)continue;
-
-      if(action==='IN'||action==='RETURN'){
-        if(loc==='fridge')fridge+=q;
-        else if(loc==='warehouse')warehouse+=q;
-      }else if(action==='OUT'||action==='BORROW'){
-        if(loc==='fridge')fridge-=q;
-        else if(loc==='warehouse')warehouse-=q;
-      }else if(action==='TRANSFER'){
-        if(note.includes('仓库 → 冰箱')){warehouse-=q;fridge+=q;}
-        else if(note.includes('冰箱 → 仓库')){fridge-=q;warehouse+=q;}
-      }else if(action==='ADJUST'){
-        const p=parseAdjustAfter(note,q);
-        if(p?.location==='fridge')fridge=p.after;
-        else if(p?.location==='warehouse')warehouse=p.after;
-      }else if(action==='EDIT'){
-        const p=parsePair(note,true);
-        if(p){fridge=p.fridge;warehouse=p.warehouse;}
-      }
-    }
-
-    return {exists,fridge:clean(fridge),warehouse:clean(warehouse)};
+    return window.InventoryHistoryEngine.snapshotItem(
+      item,
+      historyItems(),
+      allInventoryLogs,
+      cutoff,
+      {excludeStocktakeAdjustments:true}
+    );
   }
 
   function availableMonths(){
@@ -344,12 +304,21 @@
     const existingByItem=new Map(existing.map(r=>[String(r.item_id),r]));
 
     const rows=[];
-    for(const item of items){
+    for(const item of historyItems()){
       const old=existingByItem.get(String(item.id));
       if(old&&old.actual_fridge!=null&&old.actual_warehouse!=null)continue;
 
       const snap=snapshotForItem(item,cutoff);
       if(!snap.exists)continue;
+      if(!window.InventoryHistoryEngine.itemRelevantAt(item,snap,cutoff,allInventoryLogs,historyItems()))continue;
+
+      // 旧记录若缺少冰箱/仓库位置，不能凭空猜分布。
+      // 已有月末记录就保留旧基准；完全没有基准则先不生成，避免写出错误库存。
+      if(snap.locationUncertain||snap.fridge==null||snap.warehouse==null){
+        if(old)continue;
+        console.warn('盘点月末库存缺少可确认的位置记录，暂不建立快照',item.name,selectedMonth,snap);
+        continue;
+      }
 
       rows.push({
         month_key:selectedMonth,
