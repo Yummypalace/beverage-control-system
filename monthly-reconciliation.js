@@ -323,7 +323,34 @@
             <tbody id="reconInventoryBody"><tr><td colspan="21">读取中...</td></tr></tbody>
           </table>
         </div>
-      </div>`;
+      </div>
+      <div class="card recon-review-detail-card">
+        <div class="section-head">
+          <div>
+            <h3>月结备注明细</h3>
+            <div class="hint">只显示本月已经填写备注的饮料，方便集中查看已核对原因。</div>
+          </div>
+          <span id="reconReviewDetailCount" class="hint">0 条</span>
+        </div>
+        <div class="tablewrap recon-review-detail-wrap">
+          <table class="recon-review-detail-table">
+            <thead>
+              <tr>
+                <th>饮料</th>
+                <th>对账差异</th>
+                <th>系统状态</th>
+                <th>备注</th>
+                <th>人工确认</th>
+                <th>更新人</th>
+              </tr>
+            </thead>
+            <tbody id="reconReviewDetailBody">
+              <tr><td colspan="6">暂无备注</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+`;
     content.appendChild(section);
 
     document.getElementById('reconMonth').onchange=()=>{
@@ -730,6 +757,7 @@
       ['reconClosingTotal','reconSoldTotal','reconPosTotal','reconSpecialTotal','reconIssueTotal'].forEach(id=>{
         const el=document.getElementById(id);if(el)el.textContent='-';
       });
+      renderReviewDetails(allRows);
       return;
     }
 
@@ -782,6 +810,7 @@
     document.querySelectorAll('#reconInventoryBody .recon-review-note').forEach(input=>{
       input.addEventListener('input',()=>{
         updateReviewLocal(input.dataset.itemId,{note:input.value});
+        renderReviewDetails();
         scheduleReviewNoteSave(input);
       });
       input.addEventListener('change',()=>scheduleReviewNoteSave(input,true));
@@ -799,8 +828,38 @@
 
     // 顶部汇总始终显示所选月份的全部产品总数，不受搜索或排序影响。
     updateSummary(allRows);
+    renderReviewDetails(allRows);
   }
 
+  function reviewSystemStatus(r){
+    if(r.uncertain)return '需核对旧记录';
+    if(r.diff===null)return '待填 POS';
+    return Math.abs(num(r.diff))<0.000001?'OK':'CHECK';
+  }
+
+  function renderReviewDetails(rows=null){
+    const body=document.getElementById('reconReviewDetailBody');
+    const count=document.getElementById('reconReviewDetailCount');
+    if(!body||!count)return;
+
+    const source=rows||computeRows(draftFromInputs());
+    const list=source.filter(r=>String(r.reviewNote||'').trim()!=='');
+    count.textContent=String(list.length)+' 条';
+
+    body.innerHTML=list.map(r=>{
+      const diff=r.uncertain?'需核对旧记录':(r.diff===null?'—':clean(r.diff));
+      const diffClass=!r.uncertain&&r.diff!==null&&Math.abs(num(r.diff))>0.000001?(num(r.diff)>0?'recon-bad':'recon-warn'):'recon-ok';
+      const review=reviewRows.find(x=>x.month_key===selectedMonth&&String(x.item_id)===String(r.item.id));
+      return '<tr>' +
+        '<td><b>'+h(r.item.name||'')+'</b></td>' +
+        '<td class="'+diffClass+'">'+h(diff)+'</td>' +
+        '<td>'+h(reviewSystemStatus(r))+'</td>' +
+        '<td class="recon-review-detail-note">'+h(r.reviewNote||'')+'</td>' +
+        '<td>'+(r.manualOk?'<span class="recon-review-ok-badge">OK ✓</span>':'<span class="recon-muted">未确认</span>')+'</td>' +
+        '<td>'+h(review?.updated_by||'')+'</td>' +
+      '</tr>';
+    }).join('')||'<tr><td colspan="6">这个月份还没有填写备注</td></tr>';
+  }
   function updateSummary(rows){
     const opening=clean(rows.reduce((s,r)=>s+r.opening,0));
     const closing=clean(rows.reduce((s,r)=>s+r.closing,0));
@@ -896,6 +955,7 @@
       return false;
     }
     updateReviewLocal(itemId,data||payload,monthAtSave);
+    renderReviewDetails();
     return true;
   }
 
@@ -1206,6 +1266,15 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-resize-guide{position:absolute;width:2px;background:#173b5e;opacity:.65;z-index:25;pointer-events:none;box-shadow:0 0 0 1px rgba(255,255,255,.7)}
 .recon-resize-bubble{position:absolute;z-index:26;pointer-events:none;background:#17324d;color:#fff;border-radius:7px;padding:4px 7px;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 .recon-table-head{position:relative;min-height:32px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}
+.recon-review-detail-card{padding:14px;margin-top:12px}
+.recon-review-detail-card .section-head{align-items:flex-start}
+.recon-review-detail-card .section-head h3{margin:0;font-size:17px}
+.recon-review-detail-wrap{max-height:34vh;overflow:auto}
+.recon-review-detail-table{min-width:900px}
+.recon-review-detail-table thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important;white-space:nowrap}
+.recon-review-detail-table th:nth-child(2),.recon-review-detail-table td:nth-child(2),.recon-review-detail-table th:nth-child(3),.recon-review-detail-table td:nth-child(3),.recon-review-detail-table th:nth-child(5),.recon-review-detail-table td:nth-child(5){text-align:center}
+.recon-review-detail-note{white-space:normal!important;min-width:280px;line-height:1.5}
+.recon-review-ok-badge{display:inline-flex;align-items:center;justify-content:center;padding:4px 10px;border-radius:999px;background:#edf9f4;color:#087f5b;font-weight:700}
 .recon-table-meta{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0}.recon-table-meta .hint{margin-top:0;white-space:nowrap}
 .recon-table-wrap{position:relative;max-height:64vh;overflow:auto}.recon-table{min-width:100%}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap;overflow:visible;text-overflow:clip}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-review-note{width:100%;min-width:0;min-height:34px;padding:6px 8px;box-sizing:border-box}.recon-manual-ok{min-width:72px;padding:6px 9px;background:#e9edf2;color:#475467;font-size:12px}.recon-manual-ok.is-ok{background:#087f5b;color:#fff}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
 @media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}}
