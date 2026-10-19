@@ -1,6 +1,6 @@
-// Excel 导出：支持全部、指定日期、指定月份；历史库存从当前库存向后倒推，避免回填旧日期造成负数。
+// Excel 导出：支持全部、指定日期、指定月份；历史库存统一使用共享正推引擎。
 (function(){
-  function wait(){if(typeof sb==='undefined'||typeof items==='undefined'||!document.getElementById('dashboard')){setTimeout(wait,150);return;}install();}
+  function wait(){if(typeof sb==='undefined'||typeof items==='undefined'||!window.InventoryHistoryEngine||!document.getElementById('dashboard')){setTimeout(wait,150);return;}install();}
   function install(){if(document.getElementById('exportExcelBtn'))return;loadSheetJS();const dashboard=document.getElementById('dashboard');const bar=document.createElement('div');bar.style.cssText='display:flex;justify-content:flex-end;margin:0 0 14px';bar.innerHTML='<button id="exportExcelBtn" class="secondary">导出 Excel</button>';dashboard.insertBefore(bar,dashboard.firstChild);buildDialog();document.getElementById('exportExcelBtn').onclick=()=>document.getElementById('exportExcelDialog').showModal();}
   function buildDialog(){if(document.getElementById('exportExcelDialog'))return;const d=document.createElement('dialog');d.id='exportExcelDialog';d.innerHTML=`<div class="modal"><h3>导出 Excel</h3><div class="grid2"><label class="full">导出范围<select id="excelExportRange"><option value="all">全部数据</option><option value="day">指定日期</option><option value="month">指定月份</option></select></label><label id="excelDayWrap" class="full hidden">日期<input id="excelExportDay" type="date"></label><label id="excelMonthWrap" class="full hidden">月份<input id="excelExportMonth" type="month"></label><div id="excelSnapshotHint" class="full hint" style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc">全部数据：库存工作表显示当前最新库存。</div></div><div class="modalfooter"><button id="cancelExcelExport" class="secondary">取消</button><button id="confirmExcelExport">导出</button></div></div>`;document.body.appendChild(d);document.getElementById('excelExportRange').onchange=toggleRange;document.getElementById('cancelExcelExport').onclick=()=>d.close();document.getElementById('confirmExcelExport').onclick=exportExcel;}
   function toggleRange(){const v=document.getElementById('excelExportRange').value;document.getElementById('excelDayWrap').classList.toggle('hidden',v!=='day');document.getElementById('excelMonthWrap').classList.toggle('hidden',v!=='month');const hint=document.getElementById('excelSnapshotHint');if(hint)hint.textContent=v==='day'?'指定日期：库存工作表显示该日期营业结束后的库存。':v==='month'?'指定月份：库存工作表显示该月份最后一天营业结束后的库存。':'全部数据：库存工作表显示当前最新库存。';}
@@ -49,97 +49,38 @@
   function forwardLogSort(a,b){const da=dateOf(a),db=dateOf(b);if(da!==db)return da.localeCompare(db);const ca=String(a.created_at||''),cb=String(b.created_at||'');if(ca!==cb)return ca.localeCompare(cb);return Number(a.id||0)-Number(b.id||0);}
   function parseCreateState(note){const s=String(note||'');const m=s.match(/冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);return m?{fridge:Number(m[1]),warehouse:Number(m[2])}:null;}
   function parseEditAfter(note){const s=String(note||'');let m=s.match(/调整后\s*冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);if(m)return{fridge:Number(m[1]),warehouse:Number(m[2])};m=s.match(/编辑资料（冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)）/);return m?{fridge:Number(m[1]),warehouse:Number(m[2])}:null;}
+  function historyItems(){
+    return typeof allItems!=='undefined'&&Array.isArray(allItems)?allItems:items;
+  }
   function historicalInventoryRows(allLogs,cutoff){
-    const states=new Map();
-    const logsByItem=new Map();
-    (allLogs||[]).forEach(r=>{
-      const key=String(r.item_id||'');
-      if(!logsByItem.has(key))logsByItem.set(key,[]);
-      logsByItem.get(key).push(r);
-    });
-
-    items.forEach(x=>{
-      const key=String(x.id);
-      const itemLogs=(logsByItem.get(key)||[]);
-      const eligible=itemLogs.filter(r=>dateOf(r)<=cutoff);
-      const creates=eligible.filter(r=>String(r.action||'')==='CREATE').sort((a,b)=>{
-        const ca=String(a.created_at||''),cb=String(b.created_at||'');
-        if(ca!==cb)return ca.localeCompare(cb);
-        return Number(a.id||0)-Number(b.id||0);
-      });
-
-      if(creates.length){
-        const create=creates[0];
-        const initial=parseCreateState(create.note)||{fridge:0,warehouse:0};
-        const s={item:x,fridge:Number(initial.fridge||0),warehouse:Number(initial.warehouse||0),exists:true,warnings:[]};
-        const anchorCreated=String(create.created_at||'');
-        eligible
-          .filter(r=>r!==create && String(r.created_at||'')>=anchorCreated)
-          .sort((a,b)=>{
-            const ca=String(a.created_at||''),cb=String(b.created_at||'');
-            if(ca!==cb)return ca.localeCompare(cb);
-            return Number(a.id||0)-Number(b.id||0);
-          })
-          .forEach(r=>{
-            const q=Number(r.quantity||0),action=String(r.action||''),loc=locationOf(r.note),note=String(r.note||'');
-            if(action==='CREATE')return;
-            if(action==='IN'||action==='RETURN'){
-              if(loc==='fridge')s.fridge+=q;else if(loc==='warehouse')s.warehouse+=q;else addWarning(s,action==='RETURN'?'还回位置无法识别':'入库位置无法识别');
-            }else if(action==='OUT'||action==='BORROW'){
-              if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,action==='BORROW'?'借出位置无法识别':'出库位置无法识别');
-            }else if(action==='TRANSFER'){
-              if(note.startsWith('仓库 → 冰箱')){s.fridge+=q;s.warehouse-=q;}
-              else if(note.startsWith('冰箱 → 仓库')){s.fridge-=q;s.warehouse+=q;}
-              else addWarning(s,'移库方向无法识别');
-            }else if(action==='EDIT'){
-              const after=parseEditAfter(note);
-              if(after){s.fridge=after.fridge;s.warehouse=after.warehouse;}
-            }else if(action==='ADJUST'){
-              if(loc==='fridge'||loc==='warehouse')s[loc]=q;
-              else addWarning(s,'盘点位置无法识别');
-            }
-          });
-        states.set(key,s);
-      }
-    });
-
-    // 没有可用新增基准的品项，才使用当前库存向后倒推。
-    const fallback=new Map();
-    items.forEach(x=>fallback.set(String(x.id),{item:x,fridge:Number(x.fridge_quantity||0),warehouse:Number(x.warehouse_quantity||0),exists:true,warnings:[]}));
-    const futureLogs=(allLogs||[]).filter(r=>dateOf(r)>cutoff).sort(reverseLogSort);
-    futureLogs.forEach(r=>{
-      const s=fallback.get(String(r.item_id||''));if(!s||!s.exists)return;
-      const q=Number(r.quantity||0),action=String(r.action||''),loc=locationOf(r.note),note=String(r.note||'');
-      if(action==='IN'||action==='RETURN'){
-        if(loc==='fridge')s.fridge-=q;else if(loc==='warehouse')s.warehouse-=q;else addWarning(s,action==='RETURN'?'还回位置无法识别':'入库位置无法识别');
-      }else if(action==='OUT'||action==='BORROW'){
-        if(loc==='fridge')s.fridge+=q;else if(loc==='warehouse')s.warehouse+=q;else addWarning(s,action==='BORROW'?'借出位置无法识别':'出库位置无法识别');
-      }else if(action==='TRANSFER'){
-        if(note.startsWith('仓库 → 冰箱')){s.fridge-=q;s.warehouse+=q;}
-        else if(note.startsWith('冰箱 → 仓库')){s.warehouse-=q;s.fridge+=q;}
-        else addWarning(s,'移库方向无法识别');
-      }else if(action==='CREATE'){
-        s.exists=false;s.fridge=0;s.warehouse=0;
-      }else if(action==='EDIT'){
-        const before=parseEditBefore(note);
-        if(before){s.fridge=before.fridge;s.warehouse=before.warehouse;}
-      }else if(action==='ADJUST'){
-        const before=parseAdjustBefore(note);
-        if(before!=null&&loc){s[loc]=before;}
-      }
-    });
-
+    const list=historyItems();
+    const states=window.InventoryHistoryEngine.snapshotAt(list,allLogs,cutoff,{excludeStocktakeAdjustments:false});
     const rows=[];let uncertain=0;
-    [...items].sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(x=>{
-      const key=String(x.id);
-      const chosen=states.get(key)||fallback.get(key);
-      if(!chosen||!chosen.exists)return;
-      if(chosen.fridge<0||chosen.warehouse<0)addWarning(chosen,'历史记录与库存变动不一致');
-      if(chosen.warnings.length)uncertain++;
-      rows.push({'库存日期':cutoff,'名称':x.name,'类别':x.category||'','规格':x.spec||'','单位':x.unit||'','冰箱库存':Number(chosen.fridge),'仓库库存':Number(chosen.warehouse),'总库存':Number(chosen.fridge)+Number(chosen.warehouse),'最低库存':Number(x.min_quantity||0),'成本价 SGD':Number(x.cost_price||0),'单位提成 SGD':Number(x.commission_per_unit||0),'数据状态':chosen.warnings.length?'需核对：'+chosen.warnings.join('；'):'历史还原'});
+    [...list].sort((a,b)=>String(a.name).localeCompare(String(b.name),'zh-CN',{numeric:true,sensitivity:'base'})).forEach(x=>{
+      const s=states.get(String(x.id));
+      if(!s||!s.exists)return;
+      if(!window.InventoryHistoryEngine.itemRelevantAt(x,s,cutoff,allLogs,list))return;
+      const locationBad=s.locationUncertain||s.fridge==null||s.warehouse==null;
+      const state=s.totalUncertain?'需核对：旧记录缺少完整库存基准':locationBad?'需核对：旧记录缺少冰箱/仓库位置':'历史正推';
+      if(state.startsWith('需核对'))uncertain++;
+      rows.push({
+        '库存日期':cutoff,
+        '名称':x.name,
+        '类别':x.category||'',
+        '规格':x.spec||'',
+        '单位':x.unit||'',
+        '冰箱库存':locationBad?'':Number(s.fridge),
+        '仓库库存':locationBad?'':Number(s.warehouse),
+        '总库存':Number(s.total),
+        '最低库存':Number(x.min_quantity||0),
+        '成本价 SGD':Number(x.cost_price||0),
+        '单位提成 SGD':Number(x.commission_per_unit||0),
+        '数据状态':state
+      });
     });
     return {rows,uncertain};
   }
+
   async function exportExcel(){if(!window.XLSX)return alert('Excel 模块正在加载，请稍后重试。');const mode=document.getElementById('excelExportRange').value,value=mode==='day'?document.getElementById('excelExportDay').value:mode==='month'?document.getElementById('excelExportMonth').value:'';if(mode!=='all'&&!value)return alert(mode==='day'?'请选择日期':'请选择月份');const btn=document.getElementById('confirmExcelExport');btn.disabled=true;btn.textContent='导出中...';try{
     const [logRes,comRes]=await Promise.all([sb.from('inventory_logs').select('*').order('operation_date',{ascending:true}).order('created_at',{ascending:true}),sb.from('commission_logs').select('*').order('operation_date',{ascending:true}).order('created_at',{ascending:true})]);if(logRes.error)throw logRes.error;if(comRes.error)throw comRes.error;
     const allLogs=logRes.data||[],allCommissions=comRes.data||[];
