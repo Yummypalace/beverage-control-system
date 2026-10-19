@@ -8,6 +8,7 @@
   let posRows=[];
   let entActualRows=[];
   let reviewRows=[];
+  let lockRows=[];
   let loading=false;
   let selectedMonth='';
   let reconSortKey='name';
@@ -240,8 +241,10 @@
     extendNavigation();
     addStyle();
     installReconColumnResize();
+    window.addEventListener('app-role-changed',()=>updateLockUI());
     selectedMonth=currentMonth();
     loadData();
+    setTimeout(()=>updateLockUI(),600);
   }
 
   function buildPage(){
@@ -271,6 +274,8 @@
           <button id="reconClearPos" class="secondary">清除</button>
           <button id="reconSavePos">保存 POS 销量</button>
           <span id="reconAutoSaveStatus" class="recon-autosave-status">POS 自动保存</span>
+          <span id="reconLockStatus" class="recon-lock-status">未锁定</span>
+          <button id="reconLockToggle" class="secondary" type="button">确认月结并锁定</button>
         </div>
       </div>
 
@@ -363,6 +368,7 @@
     document.getElementById('reconExportExcel').onclick=exportMonthlyReconExcel;
     document.getElementById('reconClearPos').onclick=clearPos;
     document.getElementById('reconSavePos').onclick=savePos;
+    document.getElementById('reconLockToggle').onclick=toggleMonthLock;
     document.querySelectorAll('#monthlyReconciliation .recon-sort-btn').forEach(btn=>{
       btn.onclick=()=>{
         const key=btn.dataset.sort;
@@ -441,16 +447,18 @@
     if(body&&!hadData)body.innerHTML='<tr><td colspan="21">重新计算中...</td></tr>';
     if(status)status.textContent='重新计算中...';
     try{
-      const [logs,pos,entActual,reviews]=await Promise.all([
+      const [logs,pos,entActual,reviews,locks]=await Promise.all([
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
-        fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true}))
+        fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
+        fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true}))
       ]);
       allLogs=logs;
       posRows=pos;
       entActualRows=entActual;
       reviewRows=reviews;
+      lockRows=locks;
       populateMonths();
       const blankDraft={};
       computeRows().forEach(r=>blankDraft[r.item.id]='');
@@ -478,13 +486,14 @@
     if(body&&!hadData)body.innerHTML='<tr><td colspan="21">读取中...</td></tr>';
     if(status)status.textContent='读取中...';
     try{
-      const [logs,pos,entActual,reviews]=await Promise.all([
+      const [logs,pos,entActual,reviews,locks]=await Promise.all([
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
-        fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true}))
+        fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
+        fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true}))
       ]);
-      allLogs=logs;posRows=pos;entActualRows=entActual;reviewRows=reviews;populateMonths();render(false,draft);
+      allLogs=logs;posRows=pos;entActualRows=entActual;reviewRows=reviews;lockRows=locks;populateMonths();render(false,draft);
       if(status)status.textContent='已更新';
     }catch(e){
       console.warn('月结资料读取失败，保留现有资料',e);
@@ -505,12 +514,115 @@
     posRows.forEach(r=>{if(/^\d{4}-\d{2}$/.test(r.month_key||'')&&r.month_key>='2026-09')months.add(r.month_key);});
     entActualRows.forEach(r=>{if(/^\d{4}-\d{2}$/.test(r.month_key||'')&&r.month_key>='2026-09')months.add(r.month_key);});
     reviewRows.forEach(r=>{if(/^\d{4}-\d{2}$/.test(r.month_key||'')&&r.month_key>='2026-09')months.add(r.month_key);});
+    lockRows.forEach(r=>{if(/^\d{4}-\d{2}$/.test(r.month_key||'')&&r.month_key>='2026-09')months.add(r.month_key);});
     const list=[...months].sort((a,b)=>b.localeCompare(a));
     if(!selectedMonth||!months.has(selectedMonth))selectedMonth=currentMonth();
     select.innerHTML=list.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
     select.value=selectedMonth;
   }
 
+  function selectedLock(){
+    return lockRows.find(r=>String(r.month_key||'')===String(selectedMonth))||null;
+  }
+
+  function isSelectedMonthLocked(){
+    return !!selectedLock()?.is_locked;
+  }
+
+  function updateLockUI(){
+    const badge=document.getElementById('reconLockStatus');
+    const btn=document.getElementById('reconLockToggle');
+    const save=document.getElementById('reconSavePos');
+    const clear=document.getElementById('reconClearPos');
+    const auto=document.getElementById('reconAutoSaveStatus');
+    const isCurrent=selectedMonth===currentMonth();
+    const locked=isSelectedMonthLocked();
+    const admin=window.currentAppRole==='admin';
+    const row=selectedLock();
+
+    if(badge){
+      if(isCurrent){badge.textContent='本月未结束';badge.dataset.state='current';}
+      else if(locked){badge.textContent='已锁定';badge.dataset.state='locked';badge.title=row?.locked_by?('锁定人：'+row.locked_by):'';}
+      else{badge.textContent='未锁定';badge.dataset.state='open';badge.title='';}
+    }
+
+    if(btn){
+      btn.style.display=admin&&!isCurrent?'':'none';
+      btn.textContent=locked?'重新开启月份':'确认月结并锁定';
+      btn.classList.toggle('green',!locked);
+      btn.classList.toggle('secondary',locked);
+    }
+
+    if(save)save.disabled=locked||isCurrent;
+    if(clear)clear.disabled=locked||isCurrent;
+    if(auto&&locked){auto.textContent='月份已锁定';auto.dataset.state='saved';}
+  }
+
+  async function flushPendingBeforeLock(){
+    let ok=true;
+    posSaveTimers.forEach(timer=>clearTimeout(timer));
+    posSaveTimers.clear();
+    const pendingPos=[...pendingPosSaves.values()];
+    for(const p of pendingPos){if(await saveSinglePosValue(p)===false)ok=false;}
+
+    const pendingEntIds=[...entSaveTimers.keys()];
+    entSaveTimers.forEach(timer=>clearTimeout(timer));
+    entSaveTimers.clear();
+    for(const id of pendingEntIds){
+      const input=document.querySelector('.recon-ent-actual-input[data-item-id="'+String(id)+'"]');
+      if(input&&await saveEntActual(input)===false)ok=false;
+    }
+
+    const pendingReviewIds=[...reviewNoteTimers.keys()];
+    reviewNoteTimers.forEach(timer=>clearTimeout(timer));
+    reviewNoteTimers.clear();
+    for(const id of pendingReviewIds){
+      const input=document.querySelector('.recon-review-note[data-item-id="'+String(id)+'"]');
+      if(input&&await saveReview(id,{note:String(input.value||'')})===false)ok=false;
+    }
+    return ok;
+  }
+
+  async function toggleMonthLock(){
+    if(selectedMonth===currentMonth())return alert('本月尚未结束，不能锁定。');
+    if(window.currentAppRole!=='admin')return alert('仅 Admin 可以锁定或重新开启月份。');
+
+    const locked=isSelectedMonthLocked();
+    const btn=document.getElementById('reconLockToggle');
+    if(btn?.disabled)return;
+
+    if(locked){
+      if(!confirm(monthLabel(selectedMonth)+' 已锁定。\n\n重新开启后，这个月份的库存补录、POS、ENT、盘点、提成和月结备注都可以再次修改。确定重新开启吗？'))return;
+      if(btn){btn.disabled=true;btn.textContent='开启中...';}
+      try{
+        const {error}=await sb.rpc('set_month_lock',{p_month:selectedMonth,p_locked:false});
+        if(error)throw error;
+        await loadData();
+      }catch(e){alert('重新开启失败：'+String(e?.message||e));}
+      finally{if(btn)btn.disabled=false;updateLockUI();}
+      return;
+    }
+
+    const flushed=await flushPendingBeforeLock();
+    if(!flushed)return alert('有资料尚未成功保存，请先处理保存失败的项目，再锁定月份。');
+
+    const rows=computeRows(draftFromInputs());
+    const unresolved=rows.filter(r=>r.uncertain||r.diff===null||(Math.abs(num(r.diff))>0.000001&&!r.manualOk));
+    if(unresolved.length){
+      const names=unresolved.slice(0,5).map(r=>r.item.name).join('、');
+      return alert('这个月份还有 '+unresolved.length+' 项尚未完成核对，暂时不能锁定。\n\n请先处理 CHECK / 待填 POS；有合理原因的差异请填写备注并人工确认 OK。'+(names?'\n\n例如：'+names:''));
+    }
+
+    if(!confirm('确定完成 '+monthLabel(selectedMonth)+' 月结并锁定吗？\n\n锁定后，该月份的库存补录、撤销、盘点、POS、ENT、提成和月结备注都不能再修改。需要修改时，必须由 Admin 重新开启。'))return;
+    if(btn){btn.disabled=true;btn.textContent='锁定中...';}
+    try{
+      const {error}=await sb.rpc('set_month_lock',{p_month:selectedMonth,p_locked:true});
+      if(error)throw error;
+      await loadData();
+      alert(monthLabel(selectedMonth)+' 已完成月结并锁定。');
+    }catch(e){alert('锁定失败：'+String(e?.message||e));}
+    finally{if(btn)btn.disabled=false;updateLockUI();}
+  }
   function historyItems(){
     return typeof allItems!=='undefined'&&Array.isArray(allItems)?allItems:items;
   }
