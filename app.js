@@ -63,12 +63,29 @@ async function restoreArchivedItem(id){
   if(error)return alert('恢复失败：'+error.message);
   await loadAll();
 }
+async function hardDeleteArchivedItem(id){
+  const x=allItems.find(i=>i.id===id);if(!x)return;
+  if(x.is_active!==false)return alert('只能删除已停用饮料。');
+  if(total(x)!==0)return alert('当前仍有库存，不能永久删除。');
+
+  if(!confirm(`确定永久删除「${x.name}」吗？\n\n这会永久清除这个产品的库存操作记录、提成记录、POS/月结核对、ENT、盘点资料等所有关联数据。\n\n删除后无法恢复。`))return;
+
+  const typed=prompt(`请输入饮料名称「${x.name}」确认永久删除：`);
+  if(typed===null)return;
+  if(typed.trim()!==String(x.name||'').trim())return alert('名称不一致，已取消删除。');
+
+  const {data,error}=await sb.rpc('hard_delete_inventory_item',{p_item:id});
+  if(error)return alert('永久删除失败：'+error.message);
+
+  await loadAll();
+  alert(`「${x.name}」及其关联数据已永久删除。`);
+}
 function ensureManagementUI(){
   const settings=document.getElementById("settings");
   if(!settings||document.getElementById("managementPanel"))return;
   const wrap=document.createElement("div");
   wrap.id="managementPanel";
-  wrap.innerHTML=`<div style="height:14px"></div><div class="section-head"><h2>管理设置</h2></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px"><div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px"><h3 style="margin:0 0 12px;font-size:16px">产品类别</h3><div style="display:flex;gap:8px"><input id="newCategoryName" placeholder="例如：气泡水" style="flex:1"><button id="addCategoryBtn">新增类别</button></div><div id="categoryManagerList" style="margin-top:12px"></div></div><div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px"><h3 style="margin:0 0 12px;font-size:16px">新增登录账号</h3><input id="newAccountEmail" type="email" placeholder="员工 Email" style="width:100%;margin-bottom:8px"><input id="newAccountPassword" type="password" placeholder="初始密码（至少 6 位）" style="width:100%;margin-bottom:8px"><button id="createAccountBtn">新增账号</button><div id="accountCreateMsg" class="hint" style="margin-top:8px"></div></div><div id="archivedItemCard" style="border:1px solid #e5e7eb;border-radius:12px;padding:14px"><h3 style="margin:0 0 6px;font-size:16px">已停用饮料</h3><div class="hint" style="margin-bottom:10px">停用不会删除任何历史资料，需要时可以恢复。</div><div id="archivedItemList" class="hint">暂无停用饮料</div></div></div>`;
+  wrap.innerHTML=`<div style="height:14px"></div><div class="section-head"><h2>管理设置</h2></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px"><div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px"><h3 style="margin:0 0 12px;font-size:16px">产品类别</h3><div style="display:flex;gap:8px"><input id="newCategoryName" placeholder="例如：气泡水" style="flex:1"><button id="addCategoryBtn">新增类别</button></div><div id="categoryManagerList" style="margin-top:12px"></div></div><div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px"><h3 style="margin:0 0 12px;font-size:16px">新增登录账号</h3><input id="newAccountEmail" type="email" placeholder="员工 Email" style="width:100%;margin-bottom:8px"><input id="newAccountPassword" type="password" placeholder="初始密码（至少 6 位）" style="width:100%;margin-bottom:8px"><button id="createAccountBtn">新增账号</button><div id="accountCreateMsg" class="hint" style="margin-top:8px"></div></div><div id="archivedItemCard" style="border:1px solid #e5e7eb;border-radius:12px;padding:14px"><h3 style="margin:0 0 6px;font-size:16px">已停用饮料</h3><div class="hint" style="margin-bottom:10px">停用本身不会删除历史资料；可恢复。点击“删除”会永久清除该产品及所有关联数据，无法恢复。</div><div id="archivedItemList" class="hint">暂无停用饮料</div></div></div>`;
   settings.appendChild(wrap);
   $("addCategoryBtn").onclick=addCategory;
   $("createAccountBtn").onclick=createAccount;
@@ -76,7 +93,7 @@ function ensureManagementUI(){
 function renderArchivedItems(){
   const box=$("archivedItemList");if(!box)return;
   const rows=allItems.filter(x=>x.is_active===false).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'zh-CN',{numeric:true,sensitivity:'base'}));
-  box.innerHTML=rows.map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #eee"><div><b style="color:#172033">${esc(x.name)}</b><div style="font-size:11px;color:#6b7280;margin-top:2px">${esc(x.category||'')} · ${esc(x.unit||'')}</div></div><button class="secondary" style="padding:6px 9px;font-size:12px" onclick="restoreArchivedItem('${x.id}')">恢复</button></div>`).join('')||'<div class="hint">暂无停用饮料</div>';
+  box.innerHTML=rows.map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #eee"><div><b style="color:#172033">${esc(x.name)}</b><div style="font-size:11px;color:#6b7280;margin-top:2px">${esc(x.category||'')} · ${esc(x.unit||'')}</div></div><div style="display:flex;gap:6px;align-items:center"><button class="secondary" style="padding:6px 9px;font-size:12px" onclick="restoreArchivedItem('${x.id}')">恢复</button><button class="red" style="padding:6px 9px;font-size:12px" onclick="hardDeleteArchivedItem('${x.id}')">删除</button></div></div>`).join('')||'<div class="hint">暂无停用饮料</div>';
 }
 
 function renderCategoryManager(){const box=$("categoryManagerList");if(!box)return;if(!categories.length){box.innerHTML=`<div class="hint">请先运行 management-upgrade.sql</div>`;return}box.innerHTML=categories.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #eee"><span>${esc(c.name)}</span><button class="secondary" style="padding:5px 8px;font-size:12px" onclick="deleteCategory(${c.id},'${esc(c.name)}')">删除</button></div>`).join("")}
