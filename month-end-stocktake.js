@@ -83,6 +83,7 @@
         </div>
         <div class="stocktake-toolbar-actions">
           <button id="stocktakeRefresh" class="secondary">刷新</button>
+          <button id="stocktakeExportExcel" class="secondary">导出 Excel</button>
         </div>
       </div>
 
@@ -166,6 +167,8 @@
     });
     updateStocktakeSortHeaders();
     document.getElementById('stocktakeRefresh').onclick=refreshPage;
+    document.getElementById('stocktakeExportExcel').onclick=exportStocktakeExcel;
+    loadStocktakeSheetJS();
   }
 
   function extendNavigation(){
@@ -810,6 +813,151 @@
         <td>${h(r.user_email||'')}</td>
       </tr>`;
     }).join('')||'<tr><td colspan="8">这个月份没有库存差异调整</td></tr>';
+  }
+
+  function loadStocktakeSheetJS(){
+    if(window.XLSX||document.getElementById('stocktakeSheetJs'))return;
+    const s=document.createElement('script');
+    s.id='stocktakeSheetJs';
+    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    document.head.appendChild(s);
+  }
+
+  function stocktakeAdjustmentLogs(){
+    return allInventoryLogs
+      .filter(r=>String(r.action||'')==='ADJUST'&&String(dateOf(r)).slice(0,7)===selectedMonth&&String(r.note||'').includes('盘点调整'))
+      .sort((a,b)=>String(dateOf(a)).localeCompare(String(dateOf(b)))||String(a.created_at||'').localeCompare(String(b.created_at||'')));
+  }
+
+  function stocktakeExportRows(){
+    const {mode,dir}=stocktakeSortState();
+    const factor=dir==='desc'?-1:1;
+    return [...monthRecords]
+      .sort((a,b)=>{
+        let result=0;
+        if(mode==='category'){
+          result=compareText(a.category,b.category);
+          if(result===0)result=compareText(a.item_name,b.item_name);
+        }else{
+          result=compareText(a.item_name,b.item_name);
+        }
+        return result*factor;
+      })
+      .map(r=>{
+        const adjusted=r.actual_fridge!=null&&r.actual_warehouse!=null&&!sameAsSystem(r,r.actual_fridge,r.actual_warehouse);
+        const sysF=clean(r.system_fridge),sysW=clean(r.system_warehouse),sysT=clean(sysF+sysW);
+        const actualF=adjusted?clean(r.actual_fridge):'';
+        const actualW=adjusted?clean(r.actual_warehouse):'';
+        const actualT=adjusted?clean(num(r.actual_fridge)+num(r.actual_warehouse)):'';
+        const d=adjusted?recordDiff(r):null;
+        let diff='';
+        if(adjusted){
+          if(Math.abs(d)<0.000001)diff='位置调整';
+          else diff=d;
+        }
+        return {
+          '盘点月份':monthLabel(selectedMonth),
+          '截止日期':monthEnd(selectedMonth),
+          '名称':r.item_name||'',
+          '类别':r.category||'',
+          '规格':r.spec||'',
+          '单位':r.unit||'',
+          '系统冰箱':sysF,
+          '系统仓库':sysW,
+          '系统总库存':sysT,
+          '调整后冰箱':actualF,
+          '调整后仓库':actualW,
+          '调整后总库存':actualT,
+          '盘点差异':diff,
+          '状态':adjusted?'已调整':'',
+          '备注':adjusted?(r.note||''):'',
+          '调整人':adjusted?(r.checked_by||''):'',
+          '调整时间':adjusted&&r.checked_at?new Date(r.checked_at).toLocaleString('zh-SG',{timeZone:'Asia/Singapore',hour12:false}):''
+        };
+      });
+  }
+
+  function stocktakeSummaryRows(){
+    const adjusted=monthRecords.filter(r=>r.actual_fridge!=null&&r.actual_warehouse!=null&&!sameAsSystem(r,r.actual_fridge,r.actual_warehouse));
+    const systemFridge=clean(monthRecords.reduce((s,r)=>s+num(r.system_fridge),0));
+    const systemWarehouse=clean(monthRecords.reduce((s,r)=>s+num(r.system_warehouse),0));
+    const increase=clean(adjusted.reduce((s,r)=>{const d=recordDiff(r);return s+(d&&d>0?d:0);},0));
+    const decrease=clean(adjusted.reduce((s,r)=>{const d=recordDiff(r);return s+(d&&d<0?Math.abs(d):0);},0));
+    return [
+      {'项目':'盘点月份','数值':monthLabel(selectedMonth)},
+      {'项目':'月末截止','数值':monthEnd(selectedMonth)+' 营业结束'},
+      {'项目':'月末品项','数值':monthRecords.length},
+      {'项目':'系统冰箱总数','数值':systemFridge},
+      {'项目':'系统仓库总数','数值':systemWarehouse},
+      {'项目':'系统库存总数','数值':clean(systemFridge+systemWarehouse)},
+      {'项目':'已调整品项','数值':adjusted.length},
+      {'项目':'调整增加','数值':increase},
+      {'项目':'调整减少','数值':decrease}
+    ];
+  }
+
+  function stocktakeHistoryExportRows(){
+    return stocktakeAdjustmentLogs().map(r=>{
+      const p=parseHistory(r);
+      return {
+        '日期':dateOf(r),
+        '饮料':r.item_name||'',
+        '位置':p.location||'',
+        '调整前':p.before==null?'':clean(p.before),
+        '调整后':clean(p.after),
+        '差异':p.diff==null?'':clean(p.diff),
+        '备注':p.note||'',
+        '操作人':r.user_email||''
+      };
+    });
+  }
+
+  function addStocktakeSheet(wb,name,rows){
+    const ws=XLSX.utils.json_to_sheet(rows.length?rows:[{'暂无数据':''}]);
+    if(ws['!ref']){
+      const range=XLSX.utils.decode_range(ws['!ref']);
+      const widths=[];
+      for(let col=range.s.c;col<=range.e.c;col++){
+        let max=10;
+        for(let row=range.s.r;row<=range.e.r;row++){
+          const cell=ws[XLSX.utils.encode_cell({r:row,c:col})];
+          if(cell&&cell.v!=null)max=Math.max(max,String(cell.v).length+2);
+        }
+        widths.push({wch:Math.min(max,38)});
+      }
+      ws['!cols']=widths;
+      ws['!autofilter']={ref:ws['!ref']};
+      ws['!freeze']={xSplit:0,ySplit:1};
+    }
+    XLSX.utils.book_append_sheet(wb,ws,name);
+  }
+
+  function exportStocktakeExcel(){
+    if(!window.XLSX){
+      loadStocktakeSheetJS();
+      alert('Excel 模块正在加载，请稍后再按一次。');
+      return;
+    }
+    if(!monthRecords.length){
+      alert('目前这个月份没有可以导出的盘点记录。');
+      return;
+    }
+
+    const btn=document.getElementById('stocktakeExportExcel');
+    btn.disabled=true;
+    btn.textContent='导出中...';
+    try{
+      const wb=XLSX.utils.book_new();
+      addStocktakeSheet(wb,'盘点汇总',stocktakeSummaryRows());
+      addStocktakeSheet(wb,'月末盘点表',stocktakeExportRows());
+      addStocktakeSheet(wb,'调整明细',stocktakeHistoryExportRows());
+      XLSX.writeFile(wb,`盘点调整_${selectedMonth}.xlsx`);
+    }catch(e){
+      alert('导出失败：'+String(e?.message||e));
+    }finally{
+      btn.disabled=false;
+      btn.textContent='导出 Excel';
+    }
   }
 
   function addStyle(){
