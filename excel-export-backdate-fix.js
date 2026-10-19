@@ -10,34 +10,35 @@
       : /冰箱\s*([+-]?[0-9]+(?:\.[0-9]+)?)\s*\/\s*仓库\s*([+-]?[0-9]+(?:\.[0-9]+)?)/;
     const m=s.match(re);return m?{fridge:Number(m[1]),warehouse:Number(m[2])}:null;
   }
+  function historyItems(){
+    return typeof allItems!=='undefined'&&Array.isArray(allItems)?allItems:items;
+  }
   function build(allLogs,cutoff){
-    const byItem=new Map();
-    (allLogs||[]).forEach(r=>{const k=String(r.item_id||'');if(!byItem.has(k))byItem.set(k,[]);byItem.get(k).push(r);});
-    return [...items].sort((a,b)=>String(a.name).localeCompare(String(b.name))).flatMap(x=>{
-      const logs=(byItem.get(String(x.id))||[]);
-      const eligible=logs.filter(r=>dateOf(r)<=cutoff);
-      if(!eligible.length)return [];
-      const create=logs.filter(r=>String(r.action||'')==='CREATE').sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||'')))[0]||null;
-      let f=0,w=0,started=false;
-      if(create){
-        const init=parsePair(create.note,'create')||{fridge:0,warehouse:0};
-        f=init.fridge;w=init.warehouse;started=true;
-      }
-      const anchor=create?String(create.created_at||''):'';
-      eligible.sort((a,b)=>String(a.created_at||'').localeCompare(String(b.created_at||''))).forEach(r=>{
-        if(create&&String(r.created_at||'')<anchor)return;
-        if(r===create)return;
-        const q=Number(r.quantity||0),a=String(r.action||''),l=loc(r.note),n=String(r.note||'');
-        if(a==='IN'||a==='RETURN'){if(l==='fridge')f+=q;else if(l==='warehouse')w+=q;}
-        else if(a==='OUT'||a==='BORROW'){if(l==='fridge')f-=q;else if(l==='warehouse')w-=q;}
-        else if(a==='TRANSFER'){if(n.startsWith('仓库 → 冰箱')){f+=q;w-=q;}else if(n.startsWith('冰箱 → 仓库')){f-=q;w+=q;}}
-        else if(a==='EDIT'){const p=parsePair(n,'after')||(/编辑资料（冰箱/.test(n)?parsePair(n,'create'):null);if(p){f=p.fridge;w=p.warehouse;started=true;}}
-        else if(a==='ADJUST'){if(l==='fridge')f=q;else if(l==='warehouse')w=q;started=true;}
-      });
-      if(!started)return [];
-      return [{'库存日期':cutoff,'名称':x.name,'类别':x.category||'','规格':x.spec||'','单位':x.unit||'','冰箱库存':f,'仓库库存':w,'总库存':f+w,'最低库存':Number(x.min_quantity||0),'成本价 SGD':Number(x.cost_price||0),'单位提成 SGD':Number(x.commission_per_unit||0),'数据状态':(f<0||w<0)?'需核对：历史记录与库存变动不一致':'历史还原'}];
+    if(!window.InventoryHistoryEngine)throw new Error('历史库存引擎尚未加载，请刷新页面后重试。');
+    const list=historyItems();
+    const states=window.InventoryHistoryEngine.snapshotAt(list,allLogs,cutoff,{excludeStocktakeAdjustments:false});
+    return [...list].sort((a,b)=>String(a.name).localeCompare(String(b.name),'zh-CN',{numeric:true,sensitivity:'base'})).flatMap(x=>{
+      const s=states.get(String(x.id));
+      if(!s||!s.exists)return [];
+      if(!window.InventoryHistoryEngine.itemRelevantAt(x,s,cutoff,allLogs,list))return [];
+      const locationBad=s.locationUncertain||s.fridge==null||s.warehouse==null;
+      return [{
+        '库存日期':cutoff,
+        '名称':x.name,
+        '类别':x.category||'',
+        '规格':x.spec||'',
+        '单位':x.unit||'',
+        '冰箱库存':locationBad?'':Number(s.fridge),
+        '仓库库存':locationBad?'':Number(s.warehouse),
+        '总库存':Number(s.total),
+        '最低库存':Number(x.min_quantity||0),
+        '成本价 SGD':Number(x.cost_price||0),
+        '单位提成 SGD':Number(x.commission_per_unit||0),
+        '数据状态':s.totalUncertain?'需核对：旧记录缺少完整库存基准':locationBad?'需核对：旧记录缺少冰箱/仓库位置':'历史正推'
+      }];
     });
   }
+
   function addSheet(wb,name,rows){
     const ws=XLSX.utils.json_to_sheet(rows.length?rows:[{'暂无数据':''}]);
     ws['!autofilter']={ref:ws['!ref']};
@@ -67,7 +68,7 @@
   }
   function install(){
     const btn=$('confirmExcelExport');
-    if(!btn){setTimeout(install,300);return;}
+    if(!btn||!window.InventoryHistoryEngine){setTimeout(install,300);return;}
     if(btn.dataset.backdateFix)return;
     const original=btn.onclick;
     btn.onclick=function(e){
