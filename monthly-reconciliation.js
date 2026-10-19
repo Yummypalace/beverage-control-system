@@ -7,6 +7,7 @@
   let allLogs=[];
   let posRows=[];
   let entActualRows=[];
+  let reviewRows=[];
   let loading=false;
   let selectedMonth='';
   let reconSortKey='name';
@@ -14,6 +15,7 @@
   const posSaveTimers=new Map();
   const pendingPosSaves=new Map();
   const entSaveTimers=new Map();
+  const reviewNoteTimers=new Map();
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function num(v){const n=Number(v||0);return Number.isFinite(n)?n:0;}
@@ -67,7 +69,7 @@
   }
 
   const RECON_WIDTHS_KEY='monthlyReconColumnWidthsV4';
-  const RECON_DEFAULT_WIDTHS=[250,90,76,76,76,92,112,66,104,86,66,86,82,86,66,66,66,96,78];
+  const RECON_DEFAULT_WIDTHS=[250,90,76,76,76,92,112,66,104,86,66,86,82,86,66,66,66,96,78,210,92];
 
   function loadReconColumnWidths(){
     try{return JSON.parse(localStorage.getItem(RECON_WIDTHS_KEY)||'{}')||{};}catch(e){return {};}
@@ -117,6 +119,8 @@
     else if(index===1)max=260;
     else if(index===6||index===8)max=220;
     else if(index===18)max=180;
+    else if(index===19)max=420;
+    else if(index===20)max=160;
     return {min,max:Math.max(max,min)};
   }
 
@@ -313,8 +317,10 @@
               <th>其他</th>
               <th>对账差异</th>
               <th>状态</th>
+              <th>备注</th>
+              <th>人工确认</th>
             </tr></thead>
-            <tbody id="reconInventoryBody"><tr><td colspan="19">读取中...</td></tr></tbody>
+            <tbody id="reconInventoryBody"><tr><td colspan="21">读取中...</td></tr></tbody>
           </table>
         </div>
       </div>`;
@@ -404,17 +410,19 @@
     const status=document.getElementById('reconStatus');
     const body=document.getElementById('reconInventoryBody');
     const hadData=allLogs.length>0||posRows.length>0||entActualRows.length>0;
-    if(body&&!hadData)body.innerHTML='<tr><td colspan="19">重新计算中...</td></tr>';
+    if(body&&!hadData)body.innerHTML='<tr><td colspan="21">重新计算中...</td></tr>';
     if(status)status.textContent='重新计算中...';
     try{
-      const [logs,pos,entActual]=await Promise.all([
+      const [logs,pos,entActual,reviews]=await Promise.all([
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
-        fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true}))
+        fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
+        fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true}))
       ]);
       allLogs=logs;
       posRows=pos;
       entActualRows=entActual;
+      reviewRows=reviews;
       populateMonths();
       const blankDraft={};
       items.forEach(item=>blankDraft[item.id]='');
@@ -426,7 +434,7 @@
         render(false,blankDraft);
         if(status)status.textContent='重新计算失败，已保留现有资料';
       }else{
-        if(body)body.innerHTML=`<tr><td colspan="19">重新计算失败：${h(e.message||e)}</td></tr>`;
+        if(body)body.innerHTML=`<tr><td colspan="21">重新计算失败：${h(e.message||e)}</td></tr>`;
         if(status)status.textContent='重新计算失败';
       }
     }finally{loading=false;}
@@ -439,15 +447,16 @@
     const status=document.getElementById('reconStatus');
     const body=document.getElementById('reconInventoryBody');
     const hadData=allLogs.length>0||posRows.length>0||entActualRows.length>0;
-    if(body&&!hadData)body.innerHTML='<tr><td colspan="19">读取中...</td></tr>';
+    if(body&&!hadData)body.innerHTML='<tr><td colspan="21">读取中...</td></tr>';
     if(status)status.textContent='读取中...';
     try{
-      const [logs,pos,entActual]=await Promise.all([
+      const [logs,pos,entActual,reviews]=await Promise.all([
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
-        fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true}))
+        fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
+        fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true}))
       ]);
-      allLogs=logs;posRows=pos;entActualRows=entActual;populateMonths();render(false,draft);
+      allLogs=logs;posRows=pos;entActualRows=entActual;reviewRows=reviews;populateMonths();render(false,draft);
       if(status)status.textContent='已更新';
     }catch(e){
       console.warn('月结资料读取失败，保留现有资料',e);
@@ -455,7 +464,7 @@
         render(false,draft);
         if(status)status.textContent='读取失败，已保留现有资料';
       }else{
-        if(body)body.innerHTML=`<tr><td colspan="19">读取失败：${h(e.message||e)}</td></tr>`;
+        if(body)body.innerHTML=`<tr><td colspan="21">读取失败：${h(e.message||e)}</td></tr>`;
         if(status)status.textContent='读取失败';
       }
     }finally{loading=false;}
@@ -467,6 +476,7 @@
     allLogs.forEach(r=>{const m=monthOf(r);if(/^\d{4}-\d{2}$/.test(m)&&m>='2026-09')months.add(m);});
     posRows.forEach(r=>{if(/^\d{4}-\d{2}$/.test(r.month_key||'')&&r.month_key>='2026-09')months.add(r.month_key);});
     entActualRows.forEach(r=>{if(/^\d{4}-\d{2}$/.test(r.month_key||'')&&r.month_key>='2026-09')months.add(r.month_key);});
+    reviewRows.forEach(r=>{if(/^\d{4}-\d{2}$/.test(r.month_key||'')&&r.month_key>='2026-09')months.add(r.month_key);});
     const list=[...months].sort((a,b)=>b.localeCompare(a));
     if(!selectedMonth||!months.has(selectedMonth))selectedMonth=currentMonth();
     select.innerHTML=list.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
@@ -600,6 +610,12 @@
     return map;
   }
 
+  function reviewMap(){
+    const map=new Map();
+    reviewRows.forEach(r=>map.set(String(r.item_id)+'|'+String(r.month_key),r));
+    return map;
+  }
+
   function draftFromInputs(){
     const draft={};
     document.querySelectorAll('#reconInventoryBody .recon-pos-input[data-item-id]').forEach(i=>draft[i.dataset.itemId]=i.value);
@@ -619,6 +635,7 @@
     const close=snapshotAt(monthEnd(selectedMonth));
     const stats=monthStats();
     const pmap=posMap();
+    const rmap=reviewMap();
 
     const rows=[...items].map(item=>{
       const s=stats.get(String(item.id))||{inbound:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0};
@@ -648,7 +665,12 @@
       const explained=posValue===null?null:posValue+s.foc+s.kitchen+s.noPaid+s.cancelIn+s.other+s.borrow-s.returned;
       const diff=explained===null?null:explained-sold;
       const uncertain=!!(openState?.uncertain||closeState?.uncertain);
-      return {item,...s,opening,closing,sold,posValue,entActualValue,entDiff,explained,diff,uncertain};
+      const review=rmap.get(String(item.id)+'|'+String(selectedMonth))
+        || reviewRows.find(x=>x.month_key===selectedMonth&&String(x.item_name||'')===String(item.name||''))
+        || null;
+      const reviewNote=review?.note||'';
+      const manualOk=!!review?.manual_ok;
+      return {item,...s,opening,closing,sold,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,manualOk};
     });
 
     rows.sort((a,b)=>{
@@ -695,7 +717,8 @@
         <td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
-      </tr>`).join('')||'<tr><td colspan="19">暂无饮料资料</td></tr>';
+        <td>-</td><td>-</td>
+      </tr>`).join('')||'<tr><td colspan="21">暂无饮料资料</td></tr>';
 
       const hint=document.getElementById('reconInventoryDateHint');
       if(hint)hint.textContent='本月尚未结束，仅显示上月结存';
@@ -712,7 +735,7 @@
 
     body.innerHTML=rows.map(r=>{
       const input=r.posValue===null?'':clean(r.posValue);
-      const alert=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001;
+      const alert=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001&&!r.manualOk;
       return `<tr class="${alert?'recon-alert-row':''}">
         <td class="recon-name-cell" title="${h(r.item.name)}"><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
         <td>${h(r.item.category||'-')}</td>
@@ -733,8 +756,10 @@
         <td>${clean(r.other)}</td>
         <td>${diffText(r.diff,r.uncertain)}</td>
         <td>${statusText(r)}</td>
+        <td><input class="recon-review-note" data-item-id="${h(r.item.id)}" value="${h(r.reviewNote)}" placeholder="填写核对原因"></td>
+        <td><button type="button" class="recon-manual-ok ${r.manualOk?'is-ok':''}" data-item-id="${h(r.item.id)}">${r.manualOk?'OK ✓':'选择 OK'}</button></td>
       </tr>`;
-    }).join('')||'<tr><td colspan="19">暂无饮料资料</td></tr>';
+    }).join('')||'<tr><td colspan="21">暂无饮料资料</td></tr>';
 
     document.querySelectorAll('#reconInventoryBody .recon-pos-input').forEach(input=>{
       input.addEventListener('input',()=>{
@@ -754,6 +779,19 @@
       input.addEventListener('blur',()=>scheduleEntAutoSave(input,true));
     });
 
+    document.querySelectorAll('#reconInventoryBody .recon-review-note').forEach(input=>{
+      input.addEventListener('input',()=>{
+        updateReviewLocal(input.dataset.itemId,{note:input.value});
+        scheduleReviewNoteSave(input);
+      });
+      input.addEventListener('change',()=>scheduleReviewNoteSave(input,true));
+      input.addEventListener('blur',()=>scheduleReviewNoteSave(input,true));
+    });
+
+    document.querySelectorAll('#reconInventoryBody .recon-manual-ok').forEach(btn=>{
+      btn.addEventListener('click',()=>toggleManualOk(btn.dataset.itemId));
+    });
+
     const hint=document.getElementById('reconInventoryDateHint');
     if(hint)hint.textContent=isCurrent?'本月结存使用当前库存（本月尚未结束）':`本月结存还原至 ${monthEnd(selectedMonth)} 营业结束`;
     const monthTitle=document.getElementById('reconMonthTitle');
@@ -769,7 +807,7 @@
     const sold=clean(rows.reduce((s,r)=>s+r.sold,0));
     const pos=clean(rows.reduce((s,r)=>s+(r.posValue===null?0:r.posValue),0));
     const special=clean(rows.reduce((s,r)=>s+r.foc+r.kitchen+r.noPaid+r.cancelIn+r.other+r.borrow-r.returned,0));
-    const issue=clean(rows.reduce((s,r)=>s+(r.uncertain||r.diff===null?0:Math.abs(num(r.diff))),0));
+    const issue=clean(rows.reduce((s,r)=>s+(r.uncertain||r.diff===null||r.manualOk?0:Math.abs(num(r.diff))),0));
     document.getElementById('reconOpeningTotal').textContent=opening;
     document.getElementById('reconClosingTotal').textContent=closing;
     document.getElementById('reconSoldTotal').textContent=sold;
@@ -812,6 +850,75 @@
     const idx=entActualRows.findIndex(r=>r.month_key===monthAtSave&&String(r.item_id)===itemId);
     if(idx>=0)entActualRows[idx]=data||payload;else entActualRows.push(data||payload);
     entSaveTimers.delete(itemId);
+  }
+
+  function reviewIndex(itemId,month=selectedMonth){
+    return reviewRows.findIndex(r=>r.month_key===month&&String(r.item_id)===String(itemId));
+  }
+
+  function updateReviewLocal(itemId,changes,month=selectedMonth){
+    const item=items.find(x=>String(x.id)===String(itemId));if(!item)return;
+    const idx=reviewIndex(itemId,month);
+    const base=idx>=0?reviewRows[idx]:{month_key:month,item_id:item.id,item_name:item.name,note:'',manual_ok:false,updated_by:'',updated_at:null};
+    const next={...base,...changes};
+    if(idx>=0)reviewRows[idx]=next;else reviewRows.push(next);
+  }
+
+  function scheduleReviewNoteSave(input,immediate=false){
+    if(!input||!input.dataset.itemId)return;
+    const itemId=String(input.dataset.itemId);
+    const old=reviewNoteTimers.get(itemId);if(old)clearTimeout(old);
+    reviewNoteTimers.set(itemId,setTimeout(()=>{
+      reviewNoteTimers.delete(itemId);
+      saveReview(itemId,{note:String(input.value||'')});
+    },immediate?0:650));
+  }
+
+  async function saveReview(itemId,changes){
+    const item=items.find(x=>String(x.id)===String(itemId));if(!item)return false;
+    const monthAtSave=selectedMonth;
+    const existing=reviewRows.find(r=>r.month_key===monthAtSave&&String(r.item_id)===String(itemId));
+    const payload={
+      month_key:monthAtSave,
+      item_id:item.id,
+      item_name:item.name,
+      note:Object.prototype.hasOwnProperty.call(changes,'note')?String(changes.note||''):String(existing?.note||''),
+      manual_ok:Object.prototype.hasOwnProperty.call(changes,'manual_ok')?!!changes.manual_ok:!!existing?.manual_ok,
+      updated_by:typeof userEmail==='function'?userEmail():'',
+      updated_at:new Date().toISOString()
+    };
+    const {data,error}=await retryResult(()=>sb.from('monthly_reconciliation_review')
+      .upsert(payload,{onConflict:'month_key,item_id'})
+      .select()
+      .single());
+    if(error){
+      console.error('月结备注 / 人工确认保存失败',error);
+      return false;
+    }
+    updateReviewLocal(itemId,data||payload,monthAtSave);
+    return true;
+  }
+
+  async function toggleManualOk(itemId){
+    const row=computeRows(draftFromInputs()).find(r=>String(r.item.id)===String(itemId));
+    if(!row)return;
+    const next=!row.manualOk;
+    if(next&&!String(row.reviewNote||'').trim()){
+      const input=document.querySelector('.recon-review-note[data-item-id="'+String(itemId)+'"]');
+      if(input&&!String(input.value||'').trim()){
+        input.focus();
+        alert('请先填写备注说明为什么这笔差异可以确认 OK。');
+        return;
+      }
+    }
+    updateReviewLocal(itemId,{manual_ok:next});
+    const ok=await saveReview(itemId,{manual_ok:next});
+    if(!ok){
+      updateReviewLocal(itemId,{manual_ok:!next});
+      alert('人工确认保存失败，请重试。');
+      return;
+    }
+    render(true);
   }
 
   function ensureSheetJS(){
@@ -866,7 +973,9 @@
         '还回':'',
         '其他':'',
         '对账差异':'',
-        '状态':'本月尚未结束'
+        '状态':'本月尚未结束',
+        '备注':'',
+        '人工确认':''
       }:{
         '名称':r.item.name||'',
         '类别':r.item.category||'',
@@ -886,7 +995,9 @@
         '还回':clean(r.returned),
         '其他':clean(r.other),
         '对账差异':r.uncertain?'需核对旧记录':(r.diff===null?'':clean(r.diff)),
-        '状态':excelStatus(r)
+        '状态':excelStatus(r),
+        '备注':r.reviewNote||'',
+        '人工确认':r.manualOk?'OK':''
       });
 
       const wb=XLSX.utils.book_new();
@@ -1096,7 +1207,7 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-resize-bubble{position:absolute;z-index:26;pointer-events:none;background:#17324d;color:#fff;border-radius:7px;padding:4px 7px;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 .recon-table-head{position:relative;min-height:32px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}
 .recon-table-meta{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0}.recon-table-meta .hint{margin-top:0;white-space:nowrap}
-.recon-table-wrap{position:relative;max-height:64vh;overflow:auto}.recon-table{min-width:100%}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap;overflow:visible;text-overflow:clip}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
+.recon-table-wrap{position:relative;max-height:64vh;overflow:auto}.recon-table{min-width:100%}.recon-table thead th{position:sticky;top:0;z-index:4;background:#f8fafc!important;white-space:nowrap;overflow:visible;text-overflow:clip}.recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-review-note{width:100%;min-width:0;min-height:34px;padding:6px 8px;box-sizing:border-box}.recon-manual-ok{min-width:72px;padding:6px 9px;background:#e9edf2;color:#475467;font-size:12px}.recon-manual-ok.is-ok{background:#087f5b;color:#fff}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
 @media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}}
 @media(max-width:620px){.recon-summary{grid-template-columns:1fr 1fr}.recon-control-actions{display:grid;grid-template-columns:1fr 1fr}.recon-control-actions button{width:100%}.recon-guide{display:block}.recon-guide b{display:block;margin-bottom:4px}}
 `;document.head.appendChild(s);
