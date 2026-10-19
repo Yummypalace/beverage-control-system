@@ -1216,7 +1216,7 @@
   async function saveSinglePosValue(pending){
     if(!pending)return;
     const {itemId,raw,monthAtSave}=pending;
-    const item=items.find(x=>String(x.id)===String(itemId));if(!item)return;
+    const item=historyItemById(itemId);if(!item)return;
 
     const q=Number(raw);
     if(!Number.isFinite(q)||q<0){
