@@ -9,6 +9,7 @@
   let allInventoryLogs=[];
   let monthRecords=[];
   let loading=false;
+  let selectedMonthLocked=false;
   let activeStocktakeId='';
   const STOCKTAKE_SORT_KEY='monthlyStocktakeSortModeV1';
   const STOCKTAKE_SORT_DIR_KEY='monthlyStocktakeSortDirectionV1';
@@ -347,10 +348,24 @@
     monthRecords=res.data||[];
   }
 
+  async function refreshSelectedMonthLock(){
+    try{
+      const {data,error}=await sb.from('monthly_period_locks')
+        .select('is_locked')
+        .eq('month_key',selectedMonth)
+        .maybeSingle();
+      if(error)throw error;
+      selectedMonthLocked=!!data?.is_locked;
+    }catch(e){
+      selectedMonthLocked=false;
+      console.warn('盘点月份锁定状态读取失败',e);
+    }
+  }
   async function loadSelectedMonth(){
     const status=document.getElementById('stocktakePageStatus');
     if(status)status.textContent='读取中...';
     try{
+      await refreshSelectedMonthLock();
       await ensureMonthSnapshot();
       await fetchMonthRecords();
       renderTable();
@@ -454,7 +469,7 @@
     document.getElementById('stocktakeDecrease').textContent=decrease;
     document.getElementById('stocktakeCount').textContent=`显示 ${rows.length} 项`;
     document.getElementById('stocktakeMonthTitle').textContent=`${monthLabel(selectedMonth)} 月末盘点表`;
-    document.getElementById('stocktakeCutoffHint').textContent=`月末记录截止 ${monthEnd(selectedMonth)} 营业结束`;
+    document.getElementById('stocktakeCutoffHint').textContent=`月末记录截止 ${monthEnd(selectedMonth)} 营业结束${selectedMonthLocked?' · 已锁定':''}`;
 
     body.innerHTML=rows.map(r=>{
       const adjusted=r.actual_fridge!=null&&r.actual_warehouse!=null;
@@ -486,12 +501,13 @@
         <td><b>${st}</b></td>
         <td>${diff}</td>
         <td>${status}</td>
-        <td><button class="secondary stocktake-adjust-row">${adjusted?'修改调整':'盘点调整'}</button></td>
+        <td><button class="secondary stocktake-adjust-row" ${selectedMonthLocked?'disabled':''}>${selectedMonthLocked?'已锁定':(adjusted?'修改调整':'盘点调整')}</button></td>
       </tr>`;
     }).join('')||'<tr><td colspan="9">这个月份没有需要盘点的饮料</td></tr>';
 
     body.querySelectorAll('tr[data-stocktake-id]').forEach(tr=>{
-      tr.querySelector('.stocktake-adjust-row').onclick=()=>openDialog(tr.dataset.stocktakeId);
+      const btn=tr.querySelector('.stocktake-adjust-row');
+      if(btn&&!selectedMonthLocked)btn.onclick=()=>openDialog(tr.dataset.stocktakeId);
     });
     requestAnimationFrame(installStocktakeColumnResize);
   }
