@@ -987,6 +987,7 @@
   }
 
   function scheduleEntAutoSave(input,immediate=false){
+    if(isSelectedMonthLocked())return;
     if(!input||!input.dataset.itemId)return;
     const itemId=String(input.dataset.itemId);
     const old=entSaveTimers.get(itemId);if(old)clearTimeout(old);
@@ -996,18 +997,20 @@
   }
 
   async function saveEntActual(input){
-    if(!input||!input.dataset.itemId)return;
+    if(isSelectedMonthLocked())return false;
+    if(!input||!input.dataset.itemId)return false;
     const itemId=String(input.dataset.itemId);
     const item=historyItemById(itemId);if(!item)return;
-    const raw=String(input.value||'').trim();if(raw==='')return;
-    const q=Number(raw);if(!Number.isFinite(q)||q<0)return;
+    const raw=String(input.value||'').trim();if(raw==='')return true;
+    const q=Number(raw);if(!Number.isFinite(q)||q<0)return false;
     const monthAtSave=selectedMonth;
     const payload={month_key:monthAtSave,item_id:item.id,item_name:item.name,ent_actual:q,updated_by:typeof userEmail==='function'?userEmail():'',updated_at:new Date().toISOString()};
     const {data,error}=await retryResult(()=>sb.from('monthly_ent_actual').upsert(payload,{onConflict:'month_key,item_id'}).select().single());
-    if(error){console.error('ENT actual auto-save failed',error);return;}
+    if(error){console.error('ENT actual auto-save failed',error);return false;}
     const idx=entActualRows.findIndex(r=>r.month_key===monthAtSave&&String(r.item_id)===itemId);
     if(idx>=0)entActualRows[idx]=data||payload;else entActualRows.push(data||payload);
     entSaveTimers.delete(itemId);
+    return true;
   }
 
   function reviewIndex(itemId,month=selectedMonth){
@@ -1031,6 +1034,7 @@
   }
 
   function scheduleReviewNoteSave(input,immediate=false){
+    if(isSelectedMonthLocked())return;
     if(!input||!input.dataset.itemId)return;
     const itemId=String(input.dataset.itemId);
     const old=reviewNoteTimers.get(itemId);if(old)clearTimeout(old);
@@ -1041,6 +1045,7 @@
   }
 
   async function saveReview(itemId,changes){
+    if(isSelectedMonthLocked())return false;
     const item=historyItemById(itemId);if(!item)return false;
     const monthAtSave=selectedMonth;
     const existing=reviewRows.find(r=>r.month_key===monthAtSave&&String(r.item_id)===String(itemId));
@@ -1087,6 +1092,7 @@
   }
 
   async function clearStaleManualOks(rows){
+    if(isSelectedMonthLocked())return;
     const stale=(rows||[]).filter(r=>r.manualOkStale);
     stale.forEach(async r=>{
       const key=selectedMonth+'|'+String(r.item.id);
@@ -1120,6 +1126,7 @@
   }
 
   async function toggleManualOk(itemId){
+    if(isSelectedMonthLocked())return alert('这个月份已经锁定，需由 Admin 重新开启后才能修改。');
     const row=computeRows(draftFromInputs()).find(r=>String(r.item.id)===String(itemId));
     if(!row)return;
 
@@ -1268,6 +1275,7 @@
   }
 
   async function clearPos(){
+    if(isSelectedMonthLocked())return alert('这个月份已经锁定，需由 Admin 重新开启后才能修改。');
     const btn=document.getElementById('reconClearPos');if(!btn)return;
     if(!confirm(monthLabel(selectedMonth)+' 的 POS 销量和 ENT (实际) 会一起清除。确定继续吗？'))return;
     btn.disabled=true;btn.textContent='清除中...';
@@ -1301,6 +1309,7 @@
   }
 
   function schedulePosAutoSave(input,immediate=false){
+    if(isSelectedMonthLocked())return;
     if(!input||!input.dataset.itemId)return;
     const itemId=String(input.dataset.itemId);
     const raw=String(input.value||'').trim();
@@ -1329,14 +1338,15 @@
   }
 
   async function saveSinglePosValue(pending){
-    if(!pending)return;
+    if(isSelectedMonthLocked())return false;
+    if(!pending)return false;
     const {itemId,raw,monthAtSave}=pending;
     const item=historyItemById(itemId);if(!item)return;
 
     const q=Number(raw);
     if(!Number.isFinite(q)||q<0){
       setAutoSaveStatus('POS 数量不正确','error');
-      return;
+      return false;
     }
 
     setAutoSaveStatus('保存中…','saving');
@@ -1357,7 +1367,7 @@
     if(error){
       setAutoSaveStatus('自动保存失败','error');
       console.error('POS auto-save failed',error);
-      return;
+      return false;
     }
 
     const idx=posRows.findIndex(r=>String(r.item_id)===String(itemId)&&r.month_key===monthAtSave);
@@ -1368,6 +1378,7 @@
       pendingPosSaves.delete(String(itemId));
     }
     setAutoSaveStatus('已自动保存 ✓','saved');
+    return true;
   }
 
   function flushPendingPosSaves(){
@@ -1390,6 +1401,7 @@
   });
 
   async function savePos(){
+    if(isSelectedMonthLocked())return alert('这个月份已经锁定，需由 Admin 重新开启后才能修改。');
     const btn=document.getElementById('reconSavePos');if(!btn)return;
     const draft=draftFromInputs();
     const upserts=[];
@@ -1436,7 +1448,7 @@
     const s=document.createElement('style');s.id='monthlyReconciliationStyle';s.textContent=`
 #monthlyReconciliation{padding:0 2px 24px}
 .recon-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:4px 0 14px}.recon-head h2{margin:0 0 4px;font-size:22px;color:#102a43}.recon-head>span{font-size:13px;color:#667085;padding-top:5px}
-.recon-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px;background:#f8fafc}.recon-control-left{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}.recon-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px;min-width:190px}.recon-controls select,.recon-controls input{min-height:42px}.recon-search-label{min-width:260px!important}.recon-control-actions{display:flex;gap:8px;align-items:center}.recon-control-actions button{min-height:42px}.recon-autosave-status{display:inline-flex;align-items:center;min-height:42px;padding:0 12px;border-radius:10px;background:#eef2f6;color:#667085;font-size:13px;font-weight:700;white-space:nowrap}.recon-autosave-status[data-state="saving"],.recon-autosave-status[data-state="pending"]{color:#b7791f}.recon-autosave-status[data-state="saved"]{color:#087f5b;background:#edf9f4}.recon-autosave-status[data-state="error"]{color:#c92a2a;background:#fff1f1}.recon-pos-error{border-color:#c92a2a!important;box-shadow:0 0 0 2px rgba(201,42,42,.08)!important}
+.recon-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px;background:#f8fafc}.recon-control-left{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}.recon-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px;min-width:190px}.recon-controls select,.recon-controls input{min-height:42px}.recon-search-label{min-width:260px!important}.recon-control-actions{display:flex;gap:8px;align-items:center}.recon-control-actions button{min-height:42px}.recon-autosave-status{display:inline-flex;align-items:center;min-height:42px;padding:0 12px;border-radius:10px;background:#eef2f6;color:#667085;font-size:13px;font-weight:700;white-space:nowrap}.recon-autosave-status[data-state="saving"],.recon-autosave-status[data-state="pending"]{color:#b7791f}.recon-autosave-status[data-state="saved"]{color:#087f5b;background:#edf9f4}.recon-autosave-status[data-state="error"]{color:#c92a2a;background:#fff1f1}.recon-lock-status{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 12px;border-radius:10px;background:#eef2f6;color:#667085;font-size:13px;font-weight:700;white-space:nowrap}.recon-lock-status[data-state="locked"]{background:#edf9f4;color:#087f5b}.recon-lock-status[data-state="open"]{background:#fff7e6;color:#b7791f}.recon-lock-status[data-state="current"]{background:#eef2f6;color:#667085}.recon-pos-error{border-color:#c92a2a!important;box-shadow:0 0 0 2px rgba(201,42,42,.08)!important}
 .recon-summary{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:10px;margin-bottom:12px}.recon-summary .card{padding:13px 14px}.recon-summary small{display:block;color:#667085}.recon-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
 .recon-guide{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#f7f9fc;color:#475467;font-size:13px;line-height:1.6}.recon-guide b{color:#173b5e;white-space:nowrap}
 .recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-sort-btn{background:none!important;color:#667085!important;padding:0!important;border:0!important;border-radius:0!important;font-size:12px!important;font-weight:700!important;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.recon-sort-btn:hover{color:#173b5e!important}.recon-sort-arrow{font-size:10px;min-width:10px;text-align:center}.recon-ent-head{background:#eef1f4!important;color:#59636e!important}.recon-table tbody td.recon-ent-col{background:#f3f4f6}.recon-ent-actual-input{width:100%;min-width:0;max-width:100%;min-height:34px;padding:6px 8px;background:#fff!important;box-sizing:border-box}.recon-ent-diff{font-weight:700}.recon-table{table-layout:fixed;width:100%;min-width:100%}.recon-table thead th{position:sticky}
