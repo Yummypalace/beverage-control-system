@@ -45,6 +45,7 @@
     }
     buildAccountUI();
     applyRoleUI();
+    window.dispatchEvent(new CustomEvent('app-role-changed',{detail:{role:currentRole,is_active:currentActive}}));
     if(currentRole==='admin')await loadAccounts();
     else{
       const list=document.getElementById('accountDirectoryList');
