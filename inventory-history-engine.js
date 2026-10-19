@@ -224,7 +224,7 @@
       };
     }
 
-    if(fridge!==null&&warehouse!==null){
+    if(fridge!==null&&warehouse!==null&&!locationUncertain){
       total=clean(fridge+warehouse);
     }
 
