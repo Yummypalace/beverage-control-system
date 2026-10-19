@@ -94,3 +94,48 @@ using (public.is_app_active());
 
 grant select,insert,update,delete on public.monthly_reconciliation_review to authenticated;
 grant usage,select on sequence public.monthly_reconciliation_review_id_seq to authenticated;
+
+
+-- 5) 人工确认必须绑定“当时的对账差异 + 当时的核对基础”。
+-- POS / 库存 / 特殊用途 / 备注任一变化后，旧的人工 OK 会自动失效，必须重新确认。
+alter table public.monthly_reconciliation_review
+  add column if not exists confirmed_diff numeric,
+  add column if not exists confirmed_signature text,
+  add column if not exists confirmed_at timestamptz,
+  add column if not exists confirmed_by text not null default '';
+
+-- 升级前的人工 OK 没有保存确认基准，不能继续当成有效确认。
+update public.monthly_reconciliation_review
+set manual_ok=false,
+    confirmed_diff=null,
+    confirmed_signature=null,
+    confirmed_at=null,
+    confirmed_by=''
+where manual_ok=true
+  and (confirmed_signature is null or confirmed_diff is null);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname='monthly_reconciliation_review_manual_ok_note_check'
+      and conrelid='public.monthly_reconciliation_review'::regclass
+  ) then
+    alter table public.monthly_reconciliation_review
+      add constraint monthly_reconciliation_review_manual_ok_note_check
+      check (not manual_ok or btrim(note) <> '');
+  end if;
+
+  if not exists (
+    select 1 from pg_constraint
+    where conname='monthly_reconciliation_review_manual_ok_basis_check'
+      and conrelid='public.monthly_reconciliation_review'::regclass
+  ) then
+    alter table public.monthly_reconciliation_review
+      add constraint monthly_reconciliation_review_manual_ok_basis_check
+      check (
+        not manual_ok
+        or (confirmed_diff is not null and confirmed_signature is not null and confirmed_at is not null)
+      );
+  end if;
+end $$;
