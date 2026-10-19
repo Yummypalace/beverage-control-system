@@ -172,14 +172,10 @@
           locationUncertain=true;
         }
       }else if(action==='EDIT'){
+        // 旧版 EDIT 若包含完整库存前后值，仍作为历史库存锚点。
+        // 新版“编辑资料｜不影响库存”属于纯资料修改，必须完全忽略库存变化。
         const p=parsePair(note,true);
         if(p)setFull(p.fridge,p.warehouse);
-        else{
-          total=clean(q);
-          fridge=null;warehouse=null;
-          locationUncertain=true;
-          totalUncertain=true;
-        }
       }else if(action==='ADJUST'){
         const p=parseAdjust(note,q);
         if(p.location&&p.after!==null&&fridge!==null&&warehouse!==null){
