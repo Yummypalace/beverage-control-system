@@ -818,6 +818,7 @@
       rows=rows.filter(r=>[r.item.name,r.item.category,r.item.spec,r.item.unit].join(' ').toLowerCase().includes(keyword));
     }
     const isCurrent=selectedMonth===currentMonth();
+    const locked=isSelectedMonthLocked();
 
     if(isCurrent){
       body.innerHTML=rows.map(r=>`<tr>
@@ -841,6 +842,7 @@
         const el=document.getElementById(id);if(el)el.textContent='-';
       });
       renderReviewDetails(allRows);
+      updateLockUI();
       return;
     }
 
@@ -854,9 +856,9 @@
         <td>${clean(r.closing)}</td>
         <td>${clean(r.inbound)}</td>
         <td><b>${clean(r.sold)}</b></td>
-        <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入"></td>
+        <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}></td>
         <td class="recon-ent-col">${clean(r.ent)}</td>
-        <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(clean(r.entActualValue))}"></td>
+        <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(clean(r.entActualValue))}" ${locked?'disabled':''}></td>
         <td class="recon-ent-col recon-ent-diff" data-ent-diff-for="${h(r.item.id)}">${Math.abs(r.entDiff)<0.000001?'<span class="recon-ok">0</span>':`<span class="${r.entDiff>0?'recon-bad':'recon-warn'}">${r.entDiff>0?'+':''}${r.entDiff}</span>`}</td>
         <td>${clean(r.foc)}</td>
         <td>${clean(r.kitchen)}</td>
@@ -867,8 +869,8 @@
         <td>${clean(r.other)}</td>
         <td>${diffText(r.diff,r.uncertain)}</td>
         <td>${statusText(r)}</td>
-        <td><input class="recon-review-note" data-item-id="${h(r.item.id)}" value="${h(r.reviewNote)}" placeholder="填写核对原因"></td>
-        <td>${r.reviewable?`<button type="button" class="recon-manual-ok ${r.manualOk?'is-ok':''}" data-item-id="${h(r.item.id)}">${r.manualOk?'OK ✓':'选择 OK'}</button>`:'<span class="recon-muted">—</span>'}</td>
+        <td><input class="recon-review-note" data-item-id="${h(r.item.id)}" value="${h(r.reviewNote)}" placeholder="填写核对原因" ${locked?'disabled':''}></td>
+        <td>${r.reviewable?`<button type="button" class="recon-manual-ok ${r.manualOk?'is-ok':''}" data-item-id="${h(r.item.id)}" ${locked?'disabled':''}>${r.manualOk?'OK ✓':'选择 OK'}</button>`:'<span class="recon-muted">—</span>'}</td>
       </tr>`;
     }).join('')||'<tr><td colspan="21">暂无饮料资料</td></tr>';
 
@@ -924,7 +926,8 @@
     // 顶部汇总始终显示所选月份的全部产品总数，不受搜索或排序影响。
     updateSummary(allRows);
     renderReviewDetails(allRows);
-    clearStaleManualOks(allRows);
+    updateLockUI();
+    if(!locked)clearStaleManualOks(allRows);
   }
 
   function reviewSystemStatus(r){
