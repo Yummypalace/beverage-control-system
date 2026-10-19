@@ -74,8 +74,8 @@
         .find(el=>String(el.textContent||'').includes('总库存')||String(el.textContent||'').includes('库存'));
       if(hint){
         hint.textContent=isEdit
-          ?'编辑资料不会改变库存。库存数量只能通过入库、出库、移库或盘点调整处理。'
-          :'新增饮料时可以填写初始库存；建立后库存数量只能通过库存操作调整。';
+          ?'编辑资料不会改变库存。库存数量只能通过入库、出库、移库、借出/还回或盘点调整处理。'
+          :'新增饮料时可设置期初库存。总库存 = 冰箱初始库存 + 仓库初始库存；建立后库存只能通过入库、出库、移库、借出/还回或盘点调整处理。';
       }
     }
 
@@ -90,6 +90,11 @@
       previousEditItem(id);
       setItemInventoryEditMode(true);
     };
+
+    // addBtn 在 app.js 初始化时绑定的是旧的 newItem 函数。
+    // 这里改成动态调用最新 newItem，避免先编辑后再“新增”时库存栏仍保持隐藏。
+    const addBtn=document.getElementById('addBtn');
+    if(addBtn)addBtn.onclick=()=>newItem();
 
     saveStock=async function(){
       const x=items.find(i=>i.id===stockItemId);if(!x)return;
