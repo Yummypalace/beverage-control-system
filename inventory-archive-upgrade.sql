@@ -69,3 +69,22 @@ grant execute on function public.set_inventory_item_archived(uuid,boolean) to au
 
 -- 不再允许客户端永久删除 inventory_items，避免月结 / POS / ENT / 人工核对被级联删除。
 drop policy if exists "admin can delete inventory" on public.inventory_items;
+
+
+-- 双保险：即使旧页面仍尝试永久删除，数据库也拒绝，历史资料不会被删掉。
+create or replace function public.block_inventory_item_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $$
+begin
+  raise exception '饮料资料不可永久删除，请使用停用 / 归档';
+end;
+$$;
+
+drop trigger if exists trg_block_inventory_item_delete on public.inventory_items;
+create trigger trg_block_inventory_item_delete
+before delete on public.inventory_items
+for each row
+execute function public.block_inventory_item_delete();
