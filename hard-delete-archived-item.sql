@@ -106,6 +106,7 @@ declare
   c_ent integer := 0;
   c_review integer := 0;
   c_stocktake integer := 0;
+  c_stocktake_orphan integer := 0;
 begin
   if not public.is_app_active() then
     raise exception '此账号已停用';
@@ -157,6 +158,10 @@ begin
   get diagnostics c_inventory_logs = row_count;
 
   if other_same_name=0 then
+    delete from public.monthly_stocktake_records
+    where item_name=i.name;
+    get diagnostics c_stocktake_orphan = row_count;
+
     delete from public.commission_logs
     where item_id is null and item_name=i.name;
     get diagnostics c_commission_logs_orphan = row_count;
@@ -180,7 +185,8 @@ begin
       'monthly_pos_sales',c_pos,
       'monthly_ent_actual',c_ent,
       'monthly_reconciliation_review',c_review,
-      'monthly_stocktake_records',c_stocktake
+      'monthly_stocktake_records',c_stocktake,
+      'monthly_stocktake_records_orphan',c_stocktake_orphan
     )
   );
 end;
