@@ -257,6 +257,9 @@
     return loc?{location:loc,after:m?num(m[1]):num(quantity)}:null;
   }
 
+  // 月末库存按“实际录入顺序”正推，而不是按 operation_date 重排。
+  // 原因：系统允许补录历史日期；例如 8/27 才补录 8/25 的入库，
+  // 如果硬按业务日期重排，会把后来的补录错误地放到旧 EDIT 之前，导致历史库存出现负数。
   function snapshotForItem(item,cutoff){
     let fridge=0,warehouse=0,exists=false;
     const cutoffMonth=String(cutoff||'').slice(0,7);
@@ -271,7 +274,11 @@
         if(String(r.action||'')==='ADJUST'&&monthlyMarker&&String(r.note||'').includes(monthlyMarker))return false;
         return true;
       })
-      .sort((a,b)=>String(dateOf(a)).localeCompare(String(dateOf(b)))||String(a.created_at||'').localeCompare(String(b.created_at||''))||Number(a.id||0)-Number(b.id||0));
+      .sort((a,b)=>{
+        const ca=String(a.created_at||''),cb=String(b.created_at||'');
+        if(ca!==cb)return ca.localeCompare(cb);
+        return Number(a.id||0)-Number(b.id||0);
+      });
 
     for(const r of logs){
       const action=String(r.action||''),q=num(r.quantity),note=String(r.note||''),loc=parseLocation(note);
