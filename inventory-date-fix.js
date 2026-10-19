@@ -62,6 +62,35 @@
       syncOutTypeVisibility();
     };
 
+    function setItemInventoryEditMode(isEdit){
+      const fridgeInput=document.getElementById('itemFridgeQty');
+      const warehouseInput=document.getElementById('itemWarehouseQty');
+      const fridgeWrap=fridgeInput?.closest('label');
+      const warehouseWrap=warehouseInput?.closest('label');
+      if(fridgeWrap)fridgeWrap.style.display=isEdit?'none':'';
+      if(warehouseWrap)warehouseWrap.style.display=isEdit?'none':'';
+
+      const hint=[...document.querySelectorAll('#itemDialog .grid2 > .full.hint')]
+        .find(el=>String(el.textContent||'').includes('总库存')||String(el.textContent||'').includes('库存'));
+      if(hint){
+        hint.textContent=isEdit
+          ?'编辑资料不会改变库存。库存数量只能通过入库、出库、移库或盘点调整处理。'
+          :'新增饮料时可以填写初始库存；建立后库存数量只能通过库存操作调整。';
+      }
+    }
+
+    const previousNewItem=newItem;
+    newItem=function(){
+      previousNewItem();
+      setItemInventoryEditMode(false);
+    };
+
+    const previousEditItem=editItem;
+    editItem=function(id){
+      previousEditItem(id);
+      setItemInventoryEditMode(true);
+    };
+
     saveStock=async function(){
       const x=items.find(i=>i.id===stockItemId);if(!x)return;
       const date=selected('stockOperationDate');
@@ -106,11 +135,12 @@
       const date=selected('itemOperationDate');
       if(!date)return alert('请选择日期');
 
-      const fq=Number(document.getElementById('itemFridgeQty').value||0);
-      const wq=Number(document.getElementById('itemWarehouseQty').value||0);
+      const existing=editingId?items.find(i=>String(i.id)===String(editingId)):null;
+      const fq=existing?Number(existing.fridge_quantity||0):Number(document.getElementById('itemFridgeQty').value||0);
+      const wq=existing?Number(existing.warehouse_quantity||0):Number(document.getElementById('itemWarehouseQty').value||0);
       const name=document.getElementById('itemName').value.trim();
       if(!name)return alert('请输入名称');
-      if(!Number.isFinite(fq)||fq<0||!Number.isFinite(wq)||wq<0)return alert('库存数量不能小于 0');
+      if(!editingId&&(!Number.isFinite(fq)||fq<0||!Number.isFinite(wq)||wq<0))return alert('库存数量不能小于 0');
 
       const btn=document.getElementById('saveItemBtn');
       if(btn?.disabled)return;
