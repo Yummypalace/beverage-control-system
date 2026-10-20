@@ -494,7 +494,7 @@
 
       return `<tr data-stocktake-id="${h(r.id)}">
         <td class="stocktake-name-cell" title="${h(r.item_name||'')}"><b>${h(r.item_name||'')}</b><div class="stocktake-sub">${h(r.spec||'')}</div></td>
-        <td>${h(r.category||'-')}</td>
+        <td><span class="pill category-pill">${h(r.category||'-')}</span></td>
         <td>${h(r.unit||'')}</td>
         <td>${sf}</td>
         <td>${sw}</td>
