@@ -73,10 +73,11 @@ function installSummaryPin(){
     summary.style.setProperty('max-width','calc(100% - 36px)','important');
     const visible=getComputedStyle(section).display!=='none'&&getComputedStyle(section).visibility!=='hidden';
     const rect=summary.getBoundingClientRect(),sectionRect=section.getBoundingClientRect();
-    const shouldPin=visible&&rect.bottom<60&&sectionRect.bottom>120&&sectionRect.top<60;
+    const header=document.getElementById('commissionHeaderOnlyOverlay');const headerHeight=header&&header.style.display==='block'?header.getBoundingClientRect().height:0;const pinTop=headerHeight+4;const shouldPin=visible&&rect.top<pinTop&&sectionRect.bottom>pinTop+48;
     pinned.style.display=shouldPin?'block':'none';
     if(shouldPin){
       pinned.textContent=summary.textContent;
+      pinned.style.top=pinTop+'px';
       pinned.style.left=Math.max(0,sectionRect.left)+'px';
     }
   }
