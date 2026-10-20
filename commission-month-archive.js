@@ -109,39 +109,4 @@ function addStyle(){
   document.head.appendChild(s);
 }
 wait();
-})();+Number(raw).toFixed(2);
-    });
-    const date=(cells[0].textContent||'').trim();
-    const show=rangeMode?true:date.slice(0,7)===activeMonth;
-    row.style.display=show?'':'none';
-    if(show){count++;qty+=Number((cells[3].textContent||'0').replace(/,/g,''))||0;amount+=Number((cells[5].textContent||'0').replace(/[^0-9.-]/g,''))||0;}
-  });
-  if(count===0&&!hasSystemEmptyRow&&!rangeMode){
-    const tr=document.createElement('tr');tr.className='commission-month-empty-row';tr.innerHTML=`<td colspan="9">${monthLabel(activeMonth)}暂无销售提成记录</td>`;body.appendChild(tr);
-  }
-  summary.textContent=`记录 ${count}｜销售数量 ${qty}｜提成 $${amount.toFixed(2)}`;
-  const label=document.getElementById('commissionActiveMonthLabel');
-  if(label)label.textContent=rangeMode?rangeLabel():(activeMonth===currentMonth()?'':`当前显示：${monthLabel(activeMonth)}`);
-  applying=false;observeBody();
-}
-function addStyle(){
-  if(document.getElementById('commissionMonthArchiveStyle'))return;
-  const s=document.createElement('style');s.id='commissionMonthArchiveStyle';s.textContent=`
-#commissionMonthArchive{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 12px}
-#commissionMonthArchive button{min-height:38px;padding:8px 13px}
-#commissionMonthArchive .month-active{background:#173b5e!important;color:#fff!important;border-color:#173b5e!important}
-#commissionOtherMonths{position:relative}
-#commissionOtherMonths>summary{list-style:none;cursor:pointer;user-select:none;border:1px solid #d9e0e8;border-radius:10px;background:#fff;padding:9px 13px;font-size:13px;font-weight:700;color:#475467}
-#commissionOtherMonths>summary::-webkit-details-marker{display:none}
-#commissionOtherMonths>summary:after{content:' ▾';font-size:11px}
-#commissionOtherMonths[open]>summary:after{content:' ▴'}
-#commissionOtherMonthList{position:absolute;z-index:30;top:45px;left:0;min-width:220px;max-height:300px;overflow:auto;padding:8px;background:#fff;border:1px solid #dfe5ec;border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.12)}
-.commission-month-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:3px 0;border:0!important;background:#fff!important;color:#344054!important;text-align:left}
-.commission-month-option:hover{background:#f5f7fa!important}.commission-month-option.month-active{background:#173b5e!important;color:#fff!important}
-.commission-month-option span{font-size:12px;opacity:.72}.commission-month-empty-note{padding:10px;color:#98a2b3;font-size:13px;white-space:nowrap}
-#commissionActiveMonthLabel{font-size:13px;font-weight:700;color:#667085}.commission-month-empty-row td{text-align:center;color:#98a2b3;padding:24px 12px!important}
-`;
-  document.head.appendChild(s);
-}
-wait();
 })();
