@@ -273,7 +273,7 @@
     if(document.getElementById('outNoteCategoryStyle'))return;
     const s=document.createElement('style');s.id='outNoteCategoryStyle';s.textContent=`
 #outNoteFilters{grid-template-columns:minmax(145px,.95fr) minmax(120px,.65fr) minmax(145px,.8fr) minmax(135px,.7fr) minmax(145px,.8fr) minmax(145px,.8fr) minmax(190px,1.05fr) auto!important}
-.out-note-category-layout{display:flex;align-items:center;justify-content:flex-start;gap:5px;white-space:nowrap}
+.out-note-category-layout{display:grid;grid-template-columns:82px 44px;align-items:center;justify-content:start;column-gap:5px;white-space:nowrap}
 .out-note-category-pill{display:inline-flex;align-items:center;justify-content:center;justify-self:start;border-radius:999px;background:#eef2f6;color:#344054;padding:4px 9px;font-size:12px;font-weight:700;white-space:nowrap}
 .out-note-category-edit{margin-left:0!important;flex:0 0 auto;width:44px;text-align:center}
 .out-note-group-head-actions{display:flex;align-items:center;gap:10px}
