@@ -50,7 +50,9 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 #commission .commission-table-scroll th:nth-child(6),#commission .commission-table-scroll td:nth-child(6){width:100px}
 #commission .commission-table-scroll th:nth-child(7),#commission .commission-table-scroll td:nth-child(7){min-width:130px}
 #commission .commission-table-scroll th:nth-child(8),#commission .commission-table-scroll td:nth-child(8){min-width:210px}
-#commission .commission-table-scroll th:first-child,#commission .commission-table-scroll td:first-child{position:static!important;left:auto!important;z-index:auto!important;box-shadow:none!important;min-width:124px!important}
+#commission .commission-table-scroll th:first-child,#commission .commission-table-scroll td:first-child{left:auto!important;box-shadow:none!important;min-width:124px!important}
+#commission .commission-table-scroll thead th:first-child{position:sticky!important;top:0!important;z-index:12!important}
+#commission .commission-table-scroll tbody td:first-child{position:static!important;z-index:auto!important}
 #commission .commission-table-scroll thead th:first-child{background:#f8fafc!important}
 #commission .commission-table-scroll th:nth-child(9),#commission .commission-table-scroll td:nth-child(9){position:static!important;right:auto!important;z-index:auto!important;min-width:82px;background:inherit!important;box-shadow:none!important}
 #commission .commission-table-scroll td:nth-child(9) .red{padding:7px 11px;font-size:12px;white-space:nowrap}
