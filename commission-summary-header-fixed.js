@@ -98,7 +98,9 @@
 
     // 只有原表头滚出页面顶部，而表格内容仍在视窗中时才显示固定表头。
     const filterBottom=document.getElementById('manualCommissionFilterPanel')?.getBoundingClientRect().bottom??-1;
-    const shouldShow=originalHead.top<0 && tableRect.bottom>100 && filterBottom<=0 && tableRect.top<48;
+    const scrollBox=table.closest('.commission-table-scroll');
+    const boxRect=scrollBox?scrollBox.getBoundingClientRect():tableRect;
+    const shouldShow=filterBottom<=0 && boxRect.top<0 && boxRect.bottom>originalHead.height && sectionRect.bottom>originalHead.height;
     if(!shouldShow){
       overlay.style.display='none';
       return;
