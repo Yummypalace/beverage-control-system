@@ -3,7 +3,7 @@
 'use strict';let installed=false,entryLines=[];
 function todaySG(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}function recordDate(r){return r.operation_date||new Date(r.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
 function wait(){if(typeof sb==='undefined'||typeof items==='undefined'||typeof commissions==='undefined'||typeof render!=='function'||!document.getElementById('commission')||!document.getElementById('itemOperationDate')){setTimeout(wait,150);return;}install();}
-function install(){if(installed)return;installed=true;addStyle();const originalOpenStock=openStock;openStock=function(id,action){originalOpenStock(id,action);const w=document.getElementById('sellerWrap');if(w){w.classList.add('hidden');w.style.display='none';}};build();const old=render;render=function(){old();refresh();};refresh();}
+function install(){if(installed)return;installed=true;addStyle();const originalOpenStock=openStock;openStock=function(id,action){originalOpenStock(id,action);const w=document.getElementById('sellerWrap');if(w){w.classList.add('hidden');w.style.display='none';}};build();installSummaryPin();const old=render;render=function(){old();refresh();};refresh();}
 function addStyle(){if(document.getElementById('commissionPolishStyle'))return;const s=document.createElement('style');s.id='commissionPolishStyle';s.textContent=`
 #commission{padding:0!important;overflow:visible!important;position:relative}
 #commission>.section-head{padding:16px 18px 10px;margin:0!important;background:#fff}
@@ -30,7 +30,7 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 .commission-footer{display:none!important}
 #commissionMonthArchive{padding:0 18px;margin:12px 0 10px!important}
 #manualCommissionFilterPanel{display:grid!important;grid-template-columns:170px minmax(190px,1fr) 170px 170px max-content!important;gap:10px!important;padding:12px 18px!important;margin:0!important;border:0!important;border-top:1px solid #eef1f5!important;border-bottom:1px solid #eef1f5!important;border-radius:0!important;background:#f8fafc!important}
-#manualCommissionSummary{display:inline-flex!important;align-items:center;width:max-content!important;max-width:calc(100% - 36px)!important;min-height:40px;padding:8px 14px;margin:10px 18px!important;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px;position:sticky;top:8px;z-index:60;box-shadow:0 2px 8px rgba(15,23,42,.12)}
+#manualCommissionSummary{display:inline-flex!important;align-items:center;width:max-content!important;max-width:calc(100% - 36px)!important;min-height:40px;padding:8px 14px;margin:10px 18px!important;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px;position:relative;z-index:1;box-shadow:none}
 #commission .commission-table-scroll{margin:0 18px 18px;border:1px solid #e5e7eb;border-radius:12px!important;max-height:64vh!important}
 #commission .commission-table-scroll table{width:100%!important;min-width:920px!important;border-collapse:separate!important;border-spacing:0!important;table-layout:auto!important}
 #commission .commission-table-scroll thead th{padding:11px 10px!important;text-align:center!important;white-space:nowrap!important}
@@ -56,6 +56,36 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 @media(max-width:900px){.commission-main-fields{grid-template-columns:1fr}.commission-item-row{grid-template-columns:1fr 1fr}.commission-item-row label:first-child{grid-column:1/-1}.commission-entry-line{grid-template-columns:90px 110px 1fr 65px}.commission-entry-line .entry-rate,.commission-entry-line .entry-amount{display:none}.commission-entry-line button{grid-column:4}.commission-note-row{align-items:flex-end}.commission-note-row>label{flex:1}#saveManualCommissionBtn{min-width:110px}}
 @media(max-width:560px){.commission-note-row{flex-direction:column;align-items:stretch}#saveManualCommissionBtn{width:100%}}
 `;document.head.appendChild(s);}
+function installSummaryPin(){
+  const summary=document.getElementById('manualCommissionSummary');
+  const section=document.getElementById('commission');
+  if(!summary||!section)return;
+  // Safari: use a body-level fixed copy rather than sticky inside nested scroll layouts.
+  const pinned=document.createElement('div');
+  pinned.id='commissionSummaryFixed';
+  pinned.setAttribute('aria-hidden','true');
+  pinned.style.cssText='display:none;position:fixed;top:8px;z-index:4500;pointer-events:none;width:max-content;max-width:calc(100vw - 24px);padding:8px 14px;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px;line-height:24px;box-shadow:0 3px 12px rgba(15,23,42,.16);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  document.body.appendChild(pinned);
+  function update(){
+    summary.style.setProperty('display','table','important');
+    summary.style.setProperty('width','max-content','important');
+    summary.style.setProperty('max-width','calc(100% - 36px)','important');
+    const visible=getComputedStyle(section).display!=='none'&&getComputedStyle(section).visibility!=='hidden';
+    const rect=summary.getBoundingClientRect(),sectionRect=section.getBoundingClientRect();
+    const shouldPin=visible&&rect.top<8&&sectionRect.bottom>65&&sectionRect.top<8;
+    pinned.style.display=shouldPin?'block':'none';
+    if(shouldPin){
+      pinned.textContent=summary.textContent;
+      pinned.style.left=Math.max(8,sectionRect.left+18)+'px';
+    }
+  }
+  const observer=new MutationObserver(update);
+  observer.observe(summary,{childList:true,characterData:true,subtree:true});
+  window.addEventListener('scroll',update,{passive:true});
+  window.addEventListener('resize',update,{passive:true});
+  document.addEventListener('scroll',update,{passive:true,capture:true});
+  update();
+}
 function build(){const section=document.getElementById('commission');if(document.getElementById('manualCommissionPanel'))document.getElementById('manualCommissionPanel').remove();const p=document.createElement('div');p.id='manualCommissionPanel';p.innerHTML=`<div class="commission-head"><h2>销售提成录入</h2></div><div class="commission-main-fields"><label>日期<input id="manualCommissionDate" type="date"></label><label>员工<input id="manualCommissionSeller" list="manualCommissionSellerList" placeholder="员工姓名"><datalist id="manualCommissionSellerList"></datalist></label></div><div class="commission-item-box"><div class="commission-item-row"><label>饮料<select id="manualCommissionItem"></select></label><label>数量<input id="manualCommissionQty" type="number" min="0.01" step="0.01" placeholder="0"></label><label>单位提成 SGD<input id="manualCommissionRate" type="number" min="0" step="0.01"></label><button id="addCommissionLineBtn" class="secondary">＋ 添加</button></div><div id="commissionEntryLines"></div></div><div class="commission-note-row"><label>备注<input id="manualCommissionNote" placeholder="备注（选填）"></label><button id="saveManualCommissionBtn">保存记录</button></div><div id="manualCommissionMessage" class="hint"></div>`;section.insertBefore(p,section.firstChild);document.getElementById('manualCommissionDate').value=todaySG();document.getElementById('manualCommissionItem').onchange=fillRate;document.getElementById('addCommissionLineBtn').onclick=addLine;document.getElementById('saveManualCommissionBtn').onclick=saveAll;
 const filter=document.getElementById('manualCommissionFilterPanel');if(filter)filter.remove();const f=document.createElement('div');f.id='manualCommissionFilterPanel';f.innerHTML=`<label>员工<select id="commissionSellerFilter"><option value="">全部员工</option></select></label><label>饮料<input id="commissionItemFilter" list="commissionItemFilterList" placeholder="全部饮料 / 输入名称搜索" autocomplete="off"><datalist id="commissionItemFilterList"></datalist></label><label>开始日期<input id="commissionDateFrom" type="date"></label><label>结束日期<input id="commissionDateTo" type="date"></label><div style="display:flex;align-items:flex-end"><button id="clearCommissionFiltersBtn" class="secondary" style="width:100%;min-height:42px">重置</button></div>`;const table=section.querySelector('table');section.insertBefore(f,table);let summary=document.getElementById('manualCommissionSummary');if(summary)summary.remove();summary=document.createElement('div');summary.id='manualCommissionSummary';section.insertBefore(summary,table);const h=section.querySelector(':scope>.section-head h2');if(h)h.textContent='销售提成记录';const hr=table.querySelector('thead tr');if(hr)hr.innerHTML='<th>日期</th><th>员工</th><th>饮料</th><th>数量</th><th>单位提成</th><th>提成金额</th><th>备注</th><th>录入账号</th><th>操作</th>';['commissionSellerFilter','commissionItemFilter','commissionDateFrom','commissionDateTo'].forEach(id=>document.getElementById(id).onchange=renderRows);document.getElementById('clearCommissionFiltersBtn').onclick=()=>{['commissionSellerFilter','commissionItemFilter','commissionDateFrom','commissionDateTo'].forEach(id=>document.getElementById(id).value='');renderRows();};}
 function refresh(){const entry=document.getElementById('manualCommissionItem'),filter=document.getElementById('commissionItemFilter'),filterList=document.getElementById('commissionItemFilterList');if(!entry||!filter)return;const ev=entry.value,fv=filter.value,sorted=[...items].sort((a,b)=>String(a.name).localeCompare(String(b.name),'zh-CN',{numeric:true,sensitivity:'base'}));entry.innerHTML='<option value="">请选择饮料</option>'+sorted.map(x=>`<option value="${x.id}">${esc(x.name)}${x.spec?' · '+esc(x.spec):''}</option>`).join('');const names=[...new Set([...sorted.map(x=>x.name),...commissions.map(x=>x.item_name).filter(Boolean)])].sort((a,b)=>String(a).localeCompare(String(b),'zh-CN',{numeric:true,sensitivity:'base'}));if(filterList)filterList.innerHTML=names.map(x=>`<option value="${esc(x)}"></option>`).join('');filter.value=fv;if([...entry.options].some(o=>o.value===ev))entry.value=ev;const sellers=[...new Set(commissions.map(x=>x.seller_name).filter(Boolean))].sort();document.getElementById('manualCommissionSellerList').innerHTML=sellers.map(x=>`<option value="${esc(x)}"></option>`).join('');const sf=document.getElementById('commissionSellerFilter'),sv=sf.value;sf.innerHTML='<option value="">全部员工</option>'+sellers.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');if([...sf.options].some(o=>o.value===sv))sf.value=sv;renderLines();renderRows();}
