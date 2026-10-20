@@ -42,9 +42,9 @@
 #manualCommissionFilterPanel #exportCommissionFiltersBtn{
   min-width:108px!important;
 }
-@media(max-width:1180px){
+@media(max-width:980px){
   #manualCommissionFilterPanel{
-    grid-template-columns:repeat(4,minmax(135px,1fr))!important;
+    grid-template-columns:repeat(2,minmax(150px,1fr))!important;
   }
   #manualCommissionFilterPanel>div:last-child{
     grid-column:1/-1!important;
