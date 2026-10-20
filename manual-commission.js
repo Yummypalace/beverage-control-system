@@ -67,6 +67,7 @@ function installSummaryPin(){
   pinned.setAttribute('aria-hidden','true');
   pinned.style.cssText='display:none;position:fixed;top:55px;z-index:5200;pointer-events:none;width:max-content;max-width:calc(100vw - 24px);padding:8px 14px;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px;line-height:24px;box-shadow:0 3px 12px rgba(15,23,42,.16);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
   document.body.appendChild(pinned);
+  const backdrop=document.createElement('div');backdrop.id='commissionSummaryBackdrop';backdrop.style.cssText='display:none;position:fixed;top:0;height:48px;background:#fff;z-index:5100;pointer-events:none;border-bottom:1px solid #e5e7eb;box-sizing:border-box';document.body.appendChild(backdrop);
   function update(){
     summary.style.setProperty('display','inline-block','important');
     summary.style.setProperty('width','max-content','important');
@@ -75,7 +76,10 @@ function installSummaryPin(){
     const rect=summary.getBoundingClientRect(),sectionRect=section.getBoundingClientRect();
     const header=document.getElementById('commissionHeaderOnlyOverlay');const headerHeight=header&&header.style.display==='block'?header.getBoundingClientRect().height:0;const pinTop=0;const shouldPin=visible&&rect.top<0&&sectionRect.bottom>headerHeight+48;
     pinned.style.display=shouldPin?'block':'none';
+    backdrop.style.display=shouldPin?'block':'none';
     if(shouldPin){
+      backdrop.style.left=Math.max(0,sectionRect.left)+'px';
+      backdrop.style.width=Math.max(0,Math.min(window.innerWidth,sectionRect.right)-Math.max(0,sectionRect.left))+'px';
       pinned.textContent=summary.textContent;
       pinned.style.top=pinTop+'px';
       pinned.style.left=Math.max(0,sectionRect.left+18)+'px';
