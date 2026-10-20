@@ -248,6 +248,8 @@
 #outNotes .out-note-detail-wrap th:first-child,#outNotes .out-note-detail-wrap .out-note-date-cell{white-space:nowrap!important;min-width:112px!important;width:112px!important;word-break:normal!important}
 #outNotes .out-note-detail-wrap th:nth-child(3),#outNotes .out-note-detail-wrap .out-note-action-cell{white-space:nowrap!important;min-width:82px!important;width:82px!important;word-break:keep-all!important}
 #outNotes .out-note-detail-wrap .out-note-action-cell .action-pill{display:inline-flex!important;white-space:nowrap!important;word-break:keep-all!important;align-items:center!important}
+#outNotes .out-note-detail-wrap th:nth-child(4),#outNotes .out-note-detail-wrap .out-note-qty-cell{white-space:nowrap!important;min-width:66px!important;word-break:keep-all!important}
+#outNotes .out-note-detail-wrap th:nth-child(5),#outNotes .out-note-detail-wrap .out-note-location-cell{white-space:nowrap!important;min-width:76px!important;word-break:keep-all!important}
 .action-pill{font-weight:700;border:1px solid transparent}
 .action-in{background:#e8f7ef!important;color:#287553!important;border-color:#d4efe0!important}
 .action-out{background:#eaf1f8!important;color:#315b7d!important;border-color:#dbe7f1!important}
