@@ -682,7 +682,7 @@
     const map=new Map(),resolver=window.InventoryHistoryEngine.createResolver(historyItems());
     allLogs.forEach(log=>{
       if(monthOf(log)!==selectedMonth||log.action!=='IN'||log.correction_ref)return;
-      const note=String(log.note||'').trim();if(!note)return;
+      const raw=String(log.note||'').trim();const note=raw.replace(/^(?:冰箱|仓库)\s*｜\s*/,'').trim();if(!note)return;
       const id=resolver.resolve(log);if(!id)return;
       const key=String(id);if(!map.has(key))map.set(key,[]);
       map.get(key).push({date:dateOf(log),qty:num(log.quantity),note});
