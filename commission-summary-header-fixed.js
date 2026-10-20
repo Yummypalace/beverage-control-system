@@ -112,6 +112,7 @@
     const right=Math.min(window.innerWidth,sectionRect.right);
     const width=Math.max(0,right-left);
 
+    overlay.style.top='48px';
     overlay.style.left=left+'px';
     overlay.style.width=width+'px';
     overlay.style.display='block';
