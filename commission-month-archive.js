@@ -71,12 +71,12 @@ function applyMonthFilter(){
       row.style.display='';
       return;
     }
-    // Ensure both currency cells keep SGD symbols after every render/month change.
     [4,5].forEach(i=>{
-      const cell=cells[i];
-      if(!cell)return;
+      const cell=cells[i];if(!cell)return;
       const raw=(cell.textContent||'').trim();
-      if(/^[-+]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)$/.test(raw))cell.textContent='
+      if(/^[0-9]+(?:[.][0-9]+)?$/.test(raw))cell.textContent=String.fromCharCode(36)+Number(raw).toFixed(2);
+    });
+    const date=(cells[0].textContent||'').trim();
     const show=rangeMode?true:date.slice(0,7)===activeMonth;
     row.style.display=show?'':'none';
     if(show){count++;qty+=Number((cells[3].textContent||'0').replace(/,/g,''))||0;amount+=Number((cells[5].textContent||'0').replace(/[^0-9.-]/g,''))||0;}
