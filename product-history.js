@@ -102,7 +102,8 @@
     if(message)message.textContent=`显示 ${filtered.length} 条 ${monthLabel(month)}记录；其他月份已收起。`;
     const rowsHtml=filtered.map(r=>`<tr><td>${esc(dateOf(r))}</td><td><b>${esc(actionName(r.action,r))}</b></td><td>${Number(r.quantity||0)}</td><td>${esc(r.note||'')}</td><td>${esc(r.user_email||'')}</td><td>${canUndo(r)?`<button class="secondary history-undo-btn" data-id="${r.id}" style="padding:5px 8px;font-size:12px">${r.correction_ref?'撤销更正':'撤销'}</button>`:'<span class="hint">不可自动撤销</span>'}</td></tr>`).join('');
     const closingLabel=month===currentMonth()?'当前库存':'月末结存';
-    const closingRow=`<tr class="product-history-closing"><td colspan="2"><b>${esc(monthLabel(month))} ${closingLabel}</b></td><td><b>${closing}</b></td><td colspan="3">该月份结束后的库存总数</td></tr>`;
+    const closingNote=month===currentMonth()?'':'该月份结束后的库存总数';
+    const closingRow=`<tr class="product-history-closing"><td colspan="2"><b>${esc(monthLabel(month))} ${closingLabel}</b></td><td><b>${closing}</b></td><td colspan="3">${closingNote}</td></tr>`;
     body.innerHTML=closingRow+(rowsHtml||'<tr><td colspan="6">这个月份没有操作记录</td></tr>');
     body.querySelectorAll('.history-undo-btn').forEach(btn=>btn.onclick=()=>undoHistoryRecord(btn.dataset.id));
   }
