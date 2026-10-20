@@ -246,6 +246,8 @@
 .out-note-summary{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}.out-note-summary span{display:inline-flex;gap:6px;align-items:center;background:#edf3f8;color:#475467;border-radius:10px;padding:8px 12px;font-size:13px}.out-note-summary b{color:#173b5e;font-size:15px}
 .out-note-card{margin-top:12px;padding:14px}.out-note-card .section-head h3{margin:0;font-size:17px}.out-note-summary-wrap{max-height:260px;overflow:auto}.out-note-detail-wrap{max-height:62vh;overflow:auto}#outNotes table{min-width:900px}#outNotes thead th{position:sticky;top:0;z-index:3;background:#f8fafc!important}
 #outNotes .out-note-detail-wrap th:first-child,#outNotes .out-note-detail-wrap .out-note-date-cell{white-space:nowrap!important;min-width:112px!important;width:112px!important;word-break:normal!important}
+#outNotes .out-note-detail-wrap th:nth-child(2),#outNotes .out-note-detail-wrap td.out-note-item-cell{white-space:nowrap!important;word-break:keep-all!important;min-width:210px!important;width:max-content!important}
+#outNotes .out-note-detail-wrap td.out-note-item-cell b{white-space:nowrap!important;word-break:keep-all!important}
 #outNotes .out-note-detail-wrap th:nth-child(3),#outNotes .out-note-detail-wrap .out-note-action-cell{white-space:nowrap!important;min-width:82px!important;width:82px!important;word-break:keep-all!important}
 #outNotes .out-note-detail-wrap .out-note-action-cell .action-pill{display:inline-flex!important;white-space:nowrap!important;word-break:keep-all!important;align-items:center!important}
 #outNotes .out-note-detail-wrap th:nth-child(4),#outNotes .out-note-detail-wrap .out-note-qty-cell{white-space:nowrap!important;min-width:66px!important;word-break:keep-all!important}
