@@ -73,7 +73,7 @@ function installSummaryPin(){
     summary.style.setProperty('max-width','calc(100% - 36px)','important');
     const visible=getComputedStyle(section).display!=='none'&&getComputedStyle(section).visibility!=='hidden';
     const rect=summary.getBoundingClientRect(),sectionRect=section.getBoundingClientRect();
-    const header=document.getElementById('commissionHeaderOnlyOverlay');const headerHeight=header&&header.style.display==='block'?header.getBoundingClientRect().height:0;const pinTop=headerHeight+4;const shouldPin=visible&&rect.top<pinTop&&sectionRect.bottom>pinTop+48;
+    const header=document.getElementById('commissionHeaderOnlyOverlay');const headerHeight=header&&header.style.display==='block'?header.getBoundingClientRect().height:0;const pinTop=0;const shouldPin=visible&&rect.top<0&&sectionRect.bottom>headerHeight+48;
     pinned.style.display=shouldPin?'block':'none';
     if(shouldPin){
       pinned.textContent=summary.textContent;
