@@ -97,7 +97,8 @@
     const sectionRect=section.getBoundingClientRect();
 
     // 只有原表头滚出页面顶部，而表格内容仍在视窗中时才显示固定表头。
-    const shouldShow=originalHead.top<0 && tableRect.bottom>originalHead.height;
+    const filterBottom=document.getElementById('manualCommissionFilterPanel')?.getBoundingClientRect().bottom??-1;
+    const shouldShow=originalHead.top<0 && tableRect.bottom>100 && filterBottom<=0 && tableRect.top<48;
     if(!shouldShow){
       overlay.style.display='none';
       return;
