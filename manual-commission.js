@@ -41,6 +41,7 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 #commission .commission-table-scroll th:nth-child(7),#commission .commission-table-scroll td:nth-child(7),
 #commission .commission-table-scroll th:nth-child(8),#commission .commission-table-scroll td:nth-child(8){text-align:left!important}
 #commission .commission-table-scroll th:nth-child(1),#commission .commission-table-scroll td:nth-child(1){width:110px}
+#commission .commission-table-scroll thead th:first-child,#commission .commission-table-scroll tbody td:first-child{padding-left:13px!important;text-align:left!important}
 #commission .commission-table-scroll th:nth-child(2),#commission .commission-table-scroll td:nth-child(2){min-width:110px}
 #commission .commission-table-scroll th:nth-child(3),#commission .commission-table-scroll td:nth-child(3){min-width:150px}
 #commission .commission-table-scroll th:nth-child(4),#commission .commission-table-scroll td:nth-child(4){width:76px}
