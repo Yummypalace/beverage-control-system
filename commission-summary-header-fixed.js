@@ -118,7 +118,7 @@
     overlay.style.display='block';
 
     // 跟随原页面的横向滚动，不改变原表格本身。
-    const scrollLeft=section.scrollLeft||0;
+    const scrollLeft=table.closest('.commission-table-scroll')?.scrollLeft||section.scrollLeft||0;
     headerTable.style.transform='translateX('+(-scrollLeft)+'px)';
   }
 
@@ -129,6 +129,7 @@
     window.addEventListener('scroll',update,{passive:true});
     window.addEventListener('resize',update,{passive:true});
     section.addEventListener('scroll',update,{passive:true});
+    table.closest('.commission-table-scroll')?.addEventListener('scroll',update,{passive:true});
 
     const observer=new MutationObserver(()=>requestAnimationFrame(update));
     observer.observe(section,{childList:true,subtree:true,characterData:true});
