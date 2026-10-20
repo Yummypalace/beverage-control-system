@@ -1,7 +1,15 @@
 // 库存操作日期保持上一次选择，只有用户手动修改时才改变。
 (function(){
+  const MIN_OPERATION_DATE='2026-09-01';
+  const MIN_OPERATION_MONTH='2026-09';
   function today(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
+  function validDate(d){return /^\d{4}-\d{2}-\d{2}$/.test(String(d||''))&&String(d)>=MIN_OPERATION_DATE;}
   let stockDate=localStorage.getItem('stockOperationDate')||today();
+  if(!validDate(stockDate)){stockDate=today();localStorage.setItem('stockOperationDate',stockDate);}
+  function applyDateMinimum(root=document){
+    root.querySelectorAll?.('input[type="date"]').forEach(e=>{e.min=MIN_OPERATION_DATE;});
+    root.querySelectorAll?.('input[type="month"]').forEach(e=>{e.min=MIN_OPERATION_MONTH;});
+  }
   function wait(){if(typeof saveItem!=='function'||typeof saveStock!=='function'||typeof render!=='function'||typeof sb==='undefined'){setTimeout(wait,120);return;}install();}
   function addDate(dialogId,inputId){const dialog=document.getElementById(dialogId);if(!dialog||document.getElementById(inputId))return;const grid=dialog.querySelector('.grid2');if(!grid)return;const label=document.createElement('label');label.className='full';label.innerHTML=`日期<input id="${inputId}" type="date" required><span class="hint">支持历史日期补录</span>`;grid.insertBefore(label,grid.firstChild);}
   function setToday(id){const e=document.getElementById(id);if(e)e.value=today();}
@@ -9,6 +17,27 @@
   function dateOf(x){return x.operation_date||new Date(x.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
   function install(){
     addDate('itemDialog','itemOperationDate');addDate('stockDialog','stockOperationDate');
+    applyDateMinimum();
+    const observer=new MutationObserver(mutations=>{
+      mutations.forEach(m=>m.addedNodes.forEach(node=>{
+        if(node.nodeType!==1)return;
+        if(node.matches?.('input[type="date"]'))node.min=MIN_OPERATION_DATE;
+        if(node.matches?.('input[type="month"]'))node.min=MIN_OPERATION_MONTH;
+        applyDateMinimum(node);
+      }));
+    });
+    observer.observe(document.body,{childList:true,subtree:true});
+    document.addEventListener('change',e=>{
+      const el=e.target;
+      if(el?.matches?.('input[type="date"]')&&el.value&&el.value<MIN_OPERATION_DATE){
+        el.value='';
+        alert('系统只允许填写 2026年9月1日及以后的日期。');
+      }
+      if(el?.matches?.('input[type="month"]')&&el.value&&el.value<MIN_OPERATION_MONTH){
+        el.value='';
+        alert('系统只允许填写 2026年9月及以后的月份。');
+      }
+    },true);
     const stockInput=document.getElementById('stockOperationDate');if(stockInput){stockInput.value=stockDate;stockInput.addEventListener('change',()=>{if(stockInput.value){stockDate=stockInput.value;localStorage.setItem('stockOperationDate',stockDate);}});}
     const oldNew=newItem;newItem=function(){oldNew();setToday('itemOperationDate');};
     const oldEdit=editItem;editItem=function(id){oldEdit(id);setToday('itemOperationDate');};
