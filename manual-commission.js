@@ -30,7 +30,7 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 .commission-footer{display:none!important}
 #commissionMonthArchive{padding:0 18px;margin:12px 0 10px!important}
 #manualCommissionFilterPanel{display:grid!important;grid-template-columns:170px minmax(190px,1fr) 170px 170px max-content!important;gap:10px!important;padding:12px 18px!important;margin:0!important;border:0!important;border-top:1px solid #eef1f5!important;border-bottom:1px solid #eef1f5!important;border-radius:0!important;background:#f8fafc!important}
-#manualCommissionSummary{display:flex!important;align-items:center;min-height:40px;padding:8px 14px;margin:10px 18px!important;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px}
+#manualCommissionSummary{display:inline-flex!important;align-items:center;width:max-content!important;max-width:calc(100% - 36px)!important;min-height:40px;padding:8px 14px;margin:10px 18px!important;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px;position:sticky;top:0;z-index:32;box-shadow:0 1px 0 #e5e7eb}
 #commission .commission-table-scroll{margin:0 18px 18px;border:1px solid #e5e7eb;border-radius:12px!important;max-height:64vh!important}
 #commission .commission-table-scroll table{width:100%!important;min-width:920px!important;border-collapse:separate!important;border-spacing:0!important;table-layout:auto!important}
 #commission .commission-table-scroll thead th{padding:11px 10px!important;text-align:center!important;white-space:nowrap!important}
