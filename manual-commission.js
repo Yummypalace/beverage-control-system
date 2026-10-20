@@ -54,7 +54,8 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 #commission .commission-table-scroll thead th:first-child{position:sticky!important;top:0!important;z-index:12!important}
 #commission .commission-table-scroll tbody td:first-child{position:static!important;z-index:auto!important}
 #commission .commission-table-scroll thead th:first-child{background:#f8fafc!important}
-#commission .commission-table-scroll th:nth-child(9),#commission .commission-table-scroll td:nth-child(9){position:static!important;right:auto!important;z-index:auto!important;min-width:82px;background:inherit!important;box-shadow:none!important}
+#commission .commission-table-scroll thead th:nth-child(9){position:sticky!important;top:0!important;right:auto!important;z-index:20!important;min-width:82px;background:#f8fafc!important;box-shadow:0 1px 0 #e5e7eb!important}
+#commission .commission-table-scroll tbody td:nth-child(9){position:static!important;right:auto!important;z-index:auto!important;min-width:82px;background:inherit!important;box-shadow:none!important}
 #commission .commission-table-scroll td:nth-child(9) .red{padding:7px 11px;font-size:12px;white-space:nowrap}
 #commission .commission-table-scroll td:nth-child(8){overflow:hidden!important;text-overflow:ellipsis!important}
 #commission .commission-table-scroll thead th:first-child{position:sticky!important;top:0!important;left:auto!important;text-align:left!important;z-index:20!important}
