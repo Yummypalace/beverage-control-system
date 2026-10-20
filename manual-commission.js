@@ -3,7 +3,7 @@
 'use strict';let installed=false,entryLines=[];
 function todaySG(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}function recordDate(r){return r.operation_date||new Date(r.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
 function wait(){if(typeof sb==='undefined'||typeof items==='undefined'||typeof commissions==='undefined'||typeof render!=='function'||!document.getElementById('commission')||!document.getElementById('itemOperationDate')){setTimeout(wait,150);return;}install();}
-function install(){if(installed)return;installed=true;addStyle();const originalOpenStock=openStock;openStock=function(id,action){originalOpenStock(id,action);const w=document.getElementById('sellerWrap');if(w){w.classList.add('hidden');w.style.display='none';}};build();installSummaryPin();const old=render;render=function(){old();refresh();};refresh();}
+function install(){if(installed)return;installed=true;addStyle();const originalOpenStock=openStock;openStock=function(id,action){originalOpenStock(id,action);const w=document.getElementById('sellerWrap');if(w){w.classList.add('hidden');w.style.display='none';}};build();document.getElementById('commissionSummaryFixed')?.remove();document.getElementById('commissionSummaryBackdrop')?.remove();const old=render;render=function(){old();refresh();};refresh();}
 function addStyle(){if(document.getElementById('commissionPolishStyle'))return;const s=document.createElement('style');s.id='commissionPolishStyle';s.textContent=`
 #commission{padding:0!important;overflow-x:hidden!important;overflow-y:visible!important;position:relative;width:100%;max-width:100%;min-width:0}
 #commission>.section-head{padding:16px 18px 10px;margin:0!important;background:#fff}
