@@ -3,9 +3,38 @@
   let nameWidth=Number(localStorage.getItem('dashboardNameWidth')||300);
   function wait(){if(typeof render!=='function'||typeof items==='undefined'){setTimeout(wait,120);return;}install();}
   function install(){const dashboard=document.getElementById('dashboard');if(!dashboard)return;if(!document.getElementById('dashboardProducts')){const card=document.createElement('div');card.id='dashboardProducts';card.className='card';card.style.marginTop='14px';card.innerHTML=`<div class="section-head"><h2>所有饮料</h2><span id="dashboardProductCount" style="font-size:12px;color:#6b7280"></span></div><div id="dashboardProductsScroll" class="tablewrap"><table><thead><tr><th class="name-col">名称<span id="dashboardNameResize" class="col-resizer" title="拖动调整宽度"></span></th><th>类别</th><th>单位</th><th>冰箱</th><th>仓库</th><th>总库存</th><th>状态</th></tr></thead><tbody id="dashboardProductsBody"></tbody></table></div>`;dashboard.appendChild(card);addStyle();setupResize();}const oldRender=render;render=function(){oldRender();renderDashboardProducts();};applyWidth();renderDashboardProducts();}
-  function addStyle(){if(document.getElementById('dashboardStickyStyle'))return;const s=document.createElement('style');s.id='dashboardStickyStyle';s.textContent=`#dashboardProducts{padding:0;overflow:hidden}#dashboardProducts>.section-head{padding:18px 20px 12px;margin:0;background:#fff}#dashboardProductsScroll{height:70vh;max-height:70vh;overflow:auto;position:relative;padding:0 20px 14px;background:#fff;scrollbar-gutter:stable}#dashboardProductsScroll table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;table-layout:fixed}#dashboardProductsScroll table thead{position:sticky;top:0;z-index:20}#dashboardProductsScroll table thead th{position:sticky;top:0;z-index:21;background:#f8fafc!important;color:#667085;font-weight:600;padding:14px 12px;border-bottom:1px solid #e5e7eb;white-space:nowrap;min-width:110px}#dashboardProductsScroll table tbody td{padding:14px 12px;border-bottom:1px solid #e5e7eb;background:#fff;min-width:110px}#dashboardProductsScroll table thead th:nth-child(n+2),#dashboardProductsScroll table tbody td:nth-child(n+2){text-align:center;vertical-align:middle}#dashboardProductsScroll .name-col,#dashboardProductsScroll table td:first-child{position:sticky;left:0;width:var(--dashboard-name-width);min-width:var(--dashboard-name-width);max-width:var(--dashboard-name-width);background:#fff!important;box-shadow:2px 0 0 #e5e7eb}#dashboardProductsScroll table tbody td:first-child{z-index:10;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#dashboardProductsScroll .name-col{z-index:30;background:#f8fafc!important;overflow:visible}.col-resizer{position:absolute;top:0;right:-4px;width:9px;height:100%;cursor:col-resize;z-index:40}.col-resizer:hover,.col-resizer.dragging{background:rgba(24,57,87,.18)}body.resizing-column{cursor:col-resize;user-select:none}`;document.head.appendChild(s);}
+  function addStyle(){if(document.getElementById('dashboardStickyStyle'))return;const s=document.createElement('style');s.id='dashboardStickyStyle';s.textContent=`#dashboardProducts{padding:0;overflow:hidden}#dashboardProducts>.section-head{padding:18px 20px 12px;margin:0;background:#fff}#dashboardProductsScroll{height:70vh;max-height:70vh;overflow:auto;position:relative;padding:0 20px 14px;background:#fff;scrollbar-gutter:stable}#dashboardProductsScroll table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;table-layout:fixed}#dashboardProductsScroll table thead{position:sticky;top:0;z-index:20}#dashboardProductsScroll table thead th{position:sticky;top:0;z-index:21;background:#f8fafc!important;color:#667085;font-weight:600;padding:14px 12px;border-bottom:1px solid #e5e7eb;white-space:nowrap;min-width:110px}#dashboardProductsScroll table tbody td{padding:14px 12px;border-bottom:1px solid #e5e7eb;background:#fff;min-width:110px}#dashboardProductsScroll table thead th:nth-child(n+2),#dashboardProductsScroll table tbody td:nth-child(n+2){text-align:center;vertical-align:middle}#dashboardProductsScroll .name-col,#dashboardProductsScroll table td:first-child{position:sticky;left:0;width:var(--dashboard-name-width);min-width:var(--dashboard-name-width);max-width:var(--dashboard-name-width);background:#fff!important;box-shadow:2px 0 0 #e5e7eb}#dashboardProductsScroll table tbody td:first-child{z-index:10;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#dashboardProductsScroll .name-col{z-index:30;background:#f8fafc!important;overflow:visible}.col-resizer{position:absolute;top:0;right:-6px;width:14px;height:100%;cursor:col-resize;z-index:40;touch-action:none;user-select:none}.col-resizer::after{content:"";position:absolute;left:6px;top:18%;width:2px;height:64%;border-radius:2px;background:#d7dde5;opacity:.45}.col-resizer:hover::after,.col-resizer.dragging::after{width:3px;background:#173b5e;opacity:.9}.col-resizer:hover,.col-resizer.dragging{background:rgba(24,57,87,.08)}body.resizing-column{cursor:col-resize;user-select:none}body.resizing-column *{cursor:col-resize!important}`;document.head.appendChild(s);}
   function applyWidth(){nameWidth=Math.max(160,Math.min(650,nameWidth));const box=document.getElementById('dashboardProductsScroll');if(box)box.style.setProperty('--dashboard-name-width',nameWidth+'px');}
-  function setupResize(){const handle=document.getElementById('dashboardNameResize');if(!handle)return;handle.addEventListener('mousedown',e=>{e.preventDefault();const startX=e.clientX,startWidth=nameWidth;handle.classList.add('dragging');document.body.classList.add('resizing-column');const move=ev=>{nameWidth=startWidth+(ev.clientX-startX);applyWidth();};const up=()=>{document.removeEventListener('mousemove',move);document.removeEventListener('mouseup',up);handle.classList.remove('dragging');document.body.classList.remove('resizing-column');localStorage.setItem('dashboardNameWidth',String(nameWidth));};document.addEventListener('mousemove',move);document.addEventListener('mouseup',up);});}
+  function setupResize(){
+    const handle=document.getElementById('dashboardNameResize');if(!handle)return;
+    handle.addEventListener('pointerdown',e=>{
+      if(e.button!==0&&e.pointerType!=='touch')return;
+      e.preventDefault();
+      const pointerId=e.pointerId;
+      const startX=e.clientX,startWidth=nameWidth;
+      handle.classList.add('dragging');
+      document.body.classList.add('resizing-column');
+      try{handle.setPointerCapture(pointerId);}catch(_){}
+      const move=ev=>{
+        if(ev.pointerId!==pointerId)return;
+        nameWidth=startWidth+(ev.clientX-startX);
+        applyWidth();
+      };
+      const up=ev=>{
+        if(ev.pointerId!==pointerId)return;
+        document.removeEventListener('pointermove',move);
+        document.removeEventListener('pointerup',up);
+        document.removeEventListener('pointercancel',up);
+        try{handle.releasePointerCapture(pointerId);}catch(_){}
+        handle.classList.remove('dragging');
+        document.body.classList.remove('resizing-column');
+        localStorage.setItem('dashboardNameWidth',String(nameWidth));
+      };
+      document.addEventListener('pointermove',move);
+      document.addEventListener('pointerup',up);
+      document.addEventListener('pointercancel',up);
+    });
+  }
   function renderDashboardProducts(){const body=document.getElementById('dashboardProductsBody');if(!body)return;document.getElementById('dashboardProductCount').textContent=`${items.length} 个品项`;body.innerHTML=items.map(x=>{const f=Number(x.fridge_quantity||0),w=Number(x.warehouse_quantity||0),t=f+w,low=t<=Number(x.min_quantity||0);return `<tr><td title="${esc(x.name)}"><button class="linkbtn" onclick="openItemDrawer('${x.id}')">${esc(x.name)}</button></td><td><span class="pill">${esc(x.category||'')}</span></td><td>${esc(x.unit||'')}</td><td>${f}</td><td>${w}</td><td class="${low?'low':'ok'}">${t}</td><td class="${low?'low':'ok'}">${low?'低库存':'正常'}</td></tr>`;}).join('')||'<tr><td colspan="7">暂无饮料</td></tr>';applyWidth();}
   wait();
 })();
