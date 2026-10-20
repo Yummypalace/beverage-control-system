@@ -35,6 +35,7 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 #commission .commission-table-scroll{margin:0 18px 18px!important;width:calc(100% - 36px)!important;max-width:calc(100% - 36px)!important;min-width:0!important;overflow-x:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;border:1px solid #e5e7eb;border-radius:12px!important;max-height:64vh!important}
 #commission .commission-table-scroll table{width:100%!important;min-width:920px!important;border-collapse:separate!important;border-spacing:0!important;table-layout:auto!important}
 #commission .commission-table-scroll thead th{padding:11px 10px!important;text-align:center!important;white-space:nowrap!important}
+#commission .commission-table-scroll thead th{position:sticky!important;top:0!important;z-index:12!important;background:#f8fafc!important}
 #commission .commission-table-scroll tbody td{padding:11px 10px!important;vertical-align:middle!important;text-align:center!important;white-space:nowrap!important}
 #commission .commission-table-scroll th:nth-child(2),#commission .commission-table-scroll td:nth-child(2),
 #commission .commission-table-scroll th:nth-child(3),#commission .commission-table-scroll td:nth-child(3),
