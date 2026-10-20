@@ -33,7 +33,7 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 #manualCommissionFilterPanel{display:grid!important;grid-template-columns:170px minmax(190px,1fr) 170px 170px max-content!important;gap:10px!important;padding:14px 16px!important;margin:12px 18px 16px!important;border:1px solid #e5e7eb!important;border-radius:12px!important;background:#fff!important}
 #manualCommissionSummary{display:inline-flex!important;align-items:center;width:max-content!important;max-width:calc(100% - 36px)!important;min-height:40px;padding:8px 14px;margin:10px 18px!important;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px;position:relative;z-index:1;box-shadow:none}
 #commission .commission-table-scroll{margin:0 18px 18px!important;width:calc(100% - 36px)!important;max-width:calc(100% - 36px)!important;min-width:0!important;overflow-x:auto!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch;border:1px solid #e5e7eb;border-radius:12px!important;max-height:64vh!important}
-#commission .commission-table-scroll table{width:100%!important;min-width:920px!important;border-collapse:separate!important;border-spacing:0!important;table-layout:auto!important}
+#commission .commission-table-scroll table{width:100%!important;min-width:920px!important;border-collapse:separate!important;border-spacing:0!important;table-layout:fixed!important}
 #commission .commission-table-scroll thead th{padding:11px 10px!important;text-align:center!important;white-space:nowrap!important}
 #commission .commission-table-scroll thead th{position:sticky!important;top:0!important;z-index:12!important;background:#f8fafc!important}
 #commission .commission-table-scroll tbody td{padding:11px 10px!important;vertical-align:middle!important;text-align:center!important;white-space:nowrap!important}
@@ -56,6 +56,9 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 #commission .commission-table-scroll thead th:first-child{background:#f8fafc!important}
 #commission .commission-table-scroll th:nth-child(9),#commission .commission-table-scroll td:nth-child(9){position:static!important;right:auto!important;z-index:auto!important;min-width:82px;background:inherit!important;box-shadow:none!important}
 #commission .commission-table-scroll td:nth-child(9) .red{padding:7px 11px;font-size:12px;white-space:nowrap}
+#commission .commission-table-scroll td:nth-child(8){overflow:hidden!important;text-overflow:ellipsis!important}
+#commission .commission-table-scroll thead th:first-child{position:sticky!important;top:0!important;left:auto!important;text-align:left!important;z-index:20!important}
+#commission .commission-table-scroll tbody td:first-child{position:static!important;left:auto!important;white-space:nowrap!important}
 @media(max-width:1180px){#manualCommissionFilterPanel{grid-template-columns:repeat(4,minmax(145px,1fr))!important}#manualCommissionFilterPanel>div:last-child{grid-column:1/-1!important}}
 @media(max-width:820px){#manualCommissionFilterPanel{grid-template-columns:1fr 1fr!important;padding:12px!important}#commissionMonthArchive{padding:0 12px}#manualCommissionSummary{margin:10px 12px!important}#commission .commission-table-scroll{margin:0 12px 14px}}
 
