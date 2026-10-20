@@ -305,7 +305,7 @@
           <table class="recon-table">
             <thead><tr>
               <th><button type="button" class="recon-sort-btn" data-sort="name">名称 <span class="recon-sort-arrow">▲</span></button></th>
-              <th><button type="button" class="recon-sort-btn" data-sort="category">类别 <span class="recon-sort-arrow">↕</span></button></th>
+              <th style="text-align:center"><button type="button" class="recon-sort-btn" data-sort="category">类别 <span class="recon-sort-arrow">↕</span></button></th>
               <th>上月结存</th>
               <th>本月结存</th>
               <th>本月入库</th>
