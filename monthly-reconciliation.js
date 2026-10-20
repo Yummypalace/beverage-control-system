@@ -836,7 +836,7 @@
     if(isCurrent){
       body.innerHTML=rows.map(r=>`<tr>
         <td class="recon-name-cell" title="${h(r.item.name)}"><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
-        <td><span class="pill category-pill">${h(r.item.category||'-')}</span></td>
+        <td style="text-align:center"><span class="pill category-pill">${h(r.item.category||'-')}</span></td>
         <td>${clean(r.opening)}</td>
         <td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
@@ -864,7 +864,7 @@
       const alert=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001&&!r.manualOk;
       return `<tr class="${alert?'recon-alert-row':''}">
         <td class="recon-name-cell" title="${h(r.item.name)}"><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
-        <td><span class="pill category-pill">${h(r.item.category||'-')}</span></td>
+        <td style="text-align:center"><span class="pill category-pill">${h(r.item.category||'-')}</span></td>
         <td>${clean(r.opening)}</td>
         <td>${clean(r.closing)}</td>
         <td>${clean(r.inbound)}</td>
