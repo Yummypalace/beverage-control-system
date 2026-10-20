@@ -65,7 +65,7 @@ function installSummaryPin(){
   const pinned=document.createElement('div');
   pinned.id='commissionSummaryFixed';
   pinned.setAttribute('aria-hidden','true');
-  pinned.style.cssText='display:none;position:fixed;top:8px;z-index:4500;pointer-events:none;width:max-content;max-width:calc(100vw - 24px);padding:8px 14px;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px;line-height:24px;box-shadow:0 3px 12px rgba(15,23,42,.16);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  pinned.style.cssText='display:none;position:fixed;top:55px;z-index:5200;pointer-events:none;width:max-content;max-width:calc(100vw - 24px);padding:8px 14px;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px;line-height:24px;box-shadow:0 3px 12px rgba(15,23,42,.16);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
   document.body.appendChild(pinned);
   function update(){
     summary.style.setProperty('display','inline-block','important');
@@ -73,7 +73,7 @@ function installSummaryPin(){
     summary.style.setProperty('max-width','calc(100% - 36px)','important');
     const visible=getComputedStyle(section).display!=='none'&&getComputedStyle(section).visibility!=='hidden';
     const rect=summary.getBoundingClientRect(),sectionRect=section.getBoundingClientRect();
-    const shouldPin=visible&&rect.bottom<8&&sectionRect.bottom>65&&sectionRect.top<8;
+    const shouldPin=visible&&rect.bottom<60&&sectionRect.bottom>120&&sectionRect.top<60;
     pinned.style.display=shouldPin?'block':'none';
     if(shouldPin){
       pinned.textContent=summary.textContent;
