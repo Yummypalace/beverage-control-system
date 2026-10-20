@@ -42,6 +42,13 @@
 #manualCommissionFilterPanel #exportCommissionFiltersBtn{
   min-width:108px!important;
 }
+@media(min-width:981px) and (max-width:1500px){
+  #manualCommissionFilterPanel{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  #manualCommissionFilterPanel>div:last-child{grid-column:1/-1!important;justify-content:flex-start!important}
+}
+#manualCommissionFilterPanel{box-sizing:border-box!important;max-width:calc(100% - 36px)!important;min-width:0!important}
+#manualCommissionFilterPanel>div:last-child{max-width:100%!important;flex-wrap:wrap!important}
+#manualCommissionFilterPanel>div:last-child button{max-width:100%!important}
 @media(max-width:980px){
   #manualCommissionFilterPanel{
     grid-template-columns:repeat(2,minmax(150px,1fr))!important;
