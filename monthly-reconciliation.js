@@ -901,7 +901,8 @@
 
     body.querySelectorAll('.recon-inbound-note-btn').forEach(btn=>btn.onclick=()=>{
       const notes=inboundNotes.get(String(btn.dataset.itemId))||[];
-      alert(notes.map(x=>x.date+'｜入库 '+x.qty+'｜'+x.note).join('\n'));
+      const total=clean(notes.reduce((sum,x)=>sum+num(x.qty),0));
+      alert('有备注入库：共 '+notes.length+' 笔｜数量合计 '+total+'\n\n'+notes.map(x=>x.date+'｜入库 '+x.qty+'｜'+x.note).join('\n'));
     });
     document.querySelectorAll('#reconInventoryBody .recon-pos-input').forEach(input=>{
       input.addEventListener('input',()=>{
