@@ -5,9 +5,11 @@ function todaySG(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/
 function wait(){if(typeof sb==='undefined'||typeof items==='undefined'||typeof commissions==='undefined'||typeof render!=='function'||!document.getElementById('commission')||!document.getElementById('itemOperationDate')){setTimeout(wait,150);return;}install();}
 function install(){if(installed)return;installed=true;addStyle();const originalOpenStock=openStock;openStock=function(id,action){originalOpenStock(id,action);const w=document.getElementById('sellerWrap');if(w){w.classList.add('hidden');w.style.display='none';}};build();const old=render;render=function(){old();refresh();};refresh();}
 function addStyle(){if(document.getElementById('commissionPolishStyle'))return;const s=document.createElement('style');s.id='commissionPolishStyle';s.textContent=`
-#manualCommissionPanel{border:1px solid #e3e8ef!important;border-radius:16px!important;padding:20px!important;background:#fff!important;box-shadow:0 2px 10px rgba(15,23,42,.04)}
-#manualCommissionPanel .commission-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #eef1f5}
-#manualCommissionPanel .commission-head h2{margin:0;font-size:20px;color:#102a43}
+#commission{padding:0!important;overflow:hidden!important}
+#commission>.section-head{padding:16px 18px 10px;margin:0!important;background:#fff}
+#manualCommissionPanel{border:0!important;border-bottom:1px solid #e5eaf0!important;border-radius:0!important;padding:16px 18px!important;background:#fff!important;box-shadow:none!important}
+#manualCommissionPanel .commission-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #eef1f5}
+#manualCommissionPanel .commission-head h2{margin:0;font-size:18px;color:#102a43}
 #manualCommissionPanel .commission-badge{font-size:12px;color:#52606d;background:#f1f5f9;border-radius:999px;padding:6px 10px}
 #manualCommissionPanel label,#manualCommissionFilterPanel label{font-size:12px;color:#667085;font-weight:600;display:flex;flex-direction:column;gap:6px}
 #manualCommissionPanel input,#manualCommissionPanel select,#manualCommissionFilterPanel input,#manualCommissionFilterPanel select{background:#fff;border:1px solid #d9e0e8;border-radius:10px;min-height:42px;padding:9px 11px;font-weight:500}
@@ -26,8 +28,31 @@ function addStyle(){if(document.getElementById('commissionPolishStyle'))return;c
 #saveManualCommissionBtn{min-width:120px;min-height:42px;white-space:nowrap}
 #manualCommissionMessage{min-height:18px;margin:8px 0 0}
 .commission-footer{display:none!important}
-#manualCommissionFilterPanel{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;gap:10px!important;padding:14px!important;margin:0 0 14px!important;border:1px solid #e5eaf0!important;border-radius:14px!important;background:#f8fafc!important}
-#manualCommissionSummary{display:inline-flex;align-items:center;min-height:34px;padding:7px 11px;margin:0 0 10px!important;border-radius:9px;background:#f1f5f9;color:#475467;font-weight:600}
+#commissionMonthArchive{padding:0 18px;margin:12px 0 10px!important}
+#manualCommissionFilterPanel{display:grid!important;grid-template-columns:170px minmax(190px,1fr) 170px 170px max-content!important;gap:10px!important;padding:12px 18px!important;margin:0!important;border:0!important;border-top:1px solid #eef1f5!important;border-bottom:1px solid #eef1f5!important;border-radius:0!important;background:#f8fafc!important}
+#manualCommissionSummary{display:flex!important;align-items:center;min-height:40px;padding:8px 14px;margin:10px 18px!important;border-radius:10px;background:#eef4f8;color:#173b5e;font-weight:700;font-size:14px}
+#commission .commission-table-scroll{margin:0 18px 18px;border:1px solid #e5e7eb;border-radius:12px!important;max-height:64vh!important}
+#commission .commission-table-scroll table{width:100%!important;min-width:920px!important;border-collapse:separate!important;border-spacing:0!important;table-layout:auto!important}
+#commission .commission-table-scroll thead th{padding:11px 10px!important;text-align:center!important;white-space:nowrap!important}
+#commission .commission-table-scroll tbody td{padding:11px 10px!important;vertical-align:middle!important;text-align:center!important;white-space:nowrap!important}
+#commission .commission-table-scroll th:nth-child(2),#commission .commission-table-scroll td:nth-child(2),
+#commission .commission-table-scroll th:nth-child(3),#commission .commission-table-scroll td:nth-child(3),
+#commission .commission-table-scroll th:nth-child(7),#commission .commission-table-scroll td:nth-child(7),
+#commission .commission-table-scroll th:nth-child(8),#commission .commission-table-scroll td:nth-child(8){text-align:left!important}
+#commission .commission-table-scroll th:nth-child(1),#commission .commission-table-scroll td:nth-child(1){width:110px}
+#commission .commission-table-scroll th:nth-child(2),#commission .commission-table-scroll td:nth-child(2){min-width:110px}
+#commission .commission-table-scroll th:nth-child(3),#commission .commission-table-scroll td:nth-child(3){min-width:150px}
+#commission .commission-table-scroll th:nth-child(4),#commission .commission-table-scroll td:nth-child(4){width:76px}
+#commission .commission-table-scroll th:nth-child(5),#commission .commission-table-scroll td:nth-child(5){width:100px}
+#commission .commission-table-scroll th:nth-child(6),#commission .commission-table-scroll td:nth-child(6){width:100px}
+#commission .commission-table-scroll th:nth-child(7),#commission .commission-table-scroll td:nth-child(7){min-width:130px}
+#commission .commission-table-scroll th:nth-child(8),#commission .commission-table-scroll td:nth-child(8){min-width:210px}
+#commission .commission-table-scroll th:nth-child(9),#commission .commission-table-scroll td:nth-child(9){position:sticky;right:0;z-index:5;width:82px;min-width:82px;background:#fff!important;box-shadow:-2px 0 0 #e5e7eb}
+#commission .commission-table-scroll thead th:nth-child(9){z-index:25;background:#f8fafc!important}
+#commission .commission-table-scroll td:nth-child(9) .red{padding:7px 11px;font-size:12px;white-space:nowrap}
+@media(max-width:1180px){#manualCommissionFilterPanel{grid-template-columns:repeat(4,minmax(145px,1fr))!important}#manualCommissionFilterPanel>div:last-child{grid-column:1/-1!important}}
+@media(max-width:820px){#manualCommissionFilterPanel{grid-template-columns:1fr 1fr!important;padding:12px!important}#commissionMonthArchive{padding:0 12px}#manualCommissionSummary{margin:10px 12px!important}#commission .commission-table-scroll{margin:0 12px 14px}}
+
 @media(max-width:900px){.commission-main-fields{grid-template-columns:1fr}.commission-item-row{grid-template-columns:1fr 1fr}.commission-item-row label:first-child{grid-column:1/-1}.commission-entry-line{grid-template-columns:90px 110px 1fr 65px}.commission-entry-line .entry-rate,.commission-entry-line .entry-amount{display:none}.commission-entry-line button{grid-column:4}.commission-note-row{align-items:flex-end}.commission-note-row>label{flex:1}#saveManualCommissionBtn{min-width:110px}}
 @media(max-width:560px){.commission-note-row{flex-direction:column;align-items:stretch}#saveManualCommissionBtn{width:100%}}
 `;document.head.appendChild(s);}
