@@ -50,6 +50,8 @@
     if(!wrapTable()){setTimeout(install,120);return;}
     installed=true;
     addStyle();
+    const scroll=document.querySelector('#commission .commission-table-scroll');
+    if(scroll)scroll.scrollLeft=0;
 
     const section=document.getElementById('commission');
     if(section){
