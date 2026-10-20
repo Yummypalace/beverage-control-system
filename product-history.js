@@ -2,6 +2,7 @@
 (function(){
   let historyRows=[];
   let currentItem=null;
+  let undoRestoreMonth=null;
   function currentMonth(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'}).slice(0,7);}
   function monthLabel(v){const [y,m]=String(v||'').split('-');return y&&m?`${y}年${Number(m)}月`:'';}
   function monthEnd(v){const [y,m]=String(v||'').split('-').map(Number);return y&&m?new Date(Date.UTC(y,m,0)).toISOString().slice(0,10):'';}
@@ -33,6 +34,7 @@
   function availableMonths(){
     const months=new Set(historyRows.map(r=>dateOf(r).slice(0,7)).filter(m=>/^\d{4}-\d{2}$/.test(m)));
     months.add(currentMonth());
+    if(undoRestoreMonth&&undoRestoreMonth!=='all')months.add(undoRestoreMonth);
     return [...months].sort((a,b)=>b.localeCompare(a));
   }
   function populateMonthFilter(){
@@ -51,7 +53,7 @@
   function actionName(a,r){if(r?.correction_ref)return '错单更正';return ({IN:'入库',OUT:'出库',BORROW:'借出',RETURN:'还回',TRANSFER:'移库',ADJUST:'盘点',CREATE:'新增',EDIT:'编辑'})[a]||a;}
   function canUndo(r){return !!r.correction_ref||['IN','OUT','BORROW','RETURN','TRANSFER'].includes(r.action);}
   async function fetchHistory(itemId){let result=await sb.from('inventory_logs').select('*').eq('item_id',itemId).order('operation_date',{ascending:false}).order('created_at',{ascending:false}).limit(1000);if(result.error&&String(result.error.message||'').toLowerCase().includes('operation_date'))result=await sb.from('inventory_logs').select('*').eq('item_id',itemId).order('created_at',{ascending:false}).limit(1000);return result;}
-  async function loadProductHistory(x){const body=document.getElementById('productHistoryBody'),summary=document.getElementById('productHistorySummary'),message=document.getElementById('historyFilterMessage');if(!body)return;historyRows=[];body.innerHTML='<tr><td colspan="6">读取中...</td></tr>';if(summary)summary.textContent='';if(message)message.textContent='';const {data,error}=await fetchHistory(x.id);if(error){body.innerHTML=`<tr><td colspan="6">读取失败：${esc(error.message)}</td></tr>`;return;}historyRows=data||[];populateMonthFilter();resetHistoryFilters();applyHistoryFilters();}
+  async function loadProductHistory(x){const body=document.getElementById('productHistoryBody'),summary=document.getElementById('productHistorySummary'),message=document.getElementById('historyFilterMessage');if(!body)return;historyRows=[];body.innerHTML='<tr><td colspan="6">读取中...</td></tr>';if(summary)summary.textContent='';if(message)message.textContent='';const {data,error}=await fetchHistory(x.id);if(error){body.innerHTML=`<tr><td colspan="6">读取失败：${esc(error.message)}</td></tr>`;return;}historyRows=data||[];populateMonthFilter();resetHistoryFilters();if(undoRestoreMonth){const sel=document.getElementById('historyMonthFilter');if(sel)sel.value=undoRestoreMonth;undoRestoreMonth=null;}applyHistoryFilters();}
   function parseAdjustDelta(note){
     const s=String(note||'');
     const before=s.match(/调整前\s*([+-]?[0-9]+(?:\.[0-9]+)?)/);
@@ -107,6 +109,6 @@
     body.innerHTML=closingRow+(rowsHtml||'<tr><td colspan="6">没有符合筛选条件的记录</td></tr>');
     body.querySelectorAll('.history-undo-btn').forEach(btn=>btn.onclick=()=>undoHistoryRecord(btn.dataset.id));
   }
-  async function undoHistoryRecord(id){const row=historyRows.find(r=>String(r.id)===String(id));if(!row)return;if(row.correction_ref){if(!confirm(`确定撤销整组错单更正吗？\n${dateOf(row)}\n\n两种饮料的库存都会一起恢复，更正记录也会一起删除。`))return;const {error}=await sb.rpc('undo_pos_correction',{p_correction_ref:row.correction_ref});if(error)return alert('撤销失败：'+error.message+'\n\n请确认已经在 Supabase 运行 pos-correction.sql。');await loadAll();const latest=currentItem?items.find(i=>i.id===currentItem.id):null;if(latest){currentItem=latest;renderDrawer(latest);}return;}let effect='';if(row.action==='OUT')effect='库存会把这次出库数量加回原来的位置。';if(row.action==='IN')effect='库存会把这次入库数量从原来的位置扣回。';if(row.action==='BORROW')effect='库存会把这次借出的数量加回原来的位置。';if(row.action==='RETURN')effect='库存会把这次还回的数量从原来的位置扣回。';if(row.action==='TRANSFER')effect='库存会按相反方向移回去。';if(!confirm(`确定撤销这条记录吗？\n${dateOf(row)} · ${actionName(row.action,row)} · 数量 ${Number(row.quantity||0)}\n\n${effect}\n记录也会同时删除。`))return;const {error}=await sb.rpc('undo_inventory_log',{p_log_id:Number(id)});if(error)return alert('撤销失败：'+error.message+'\n\n请确认已经在 Supabase 运行最新版 account-directory-upgrade.sql。');if(currentItem)await loadAll();const latest=currentItem?items.find(i=>i.id===currentItem.id):null;if(latest){currentItem=latest;renderDrawer(latest);}else if(currentItem){await loadProductHistory(currentItem);}}
+  async function undoHistoryRecord(id){const row=historyRows.find(r=>String(r.id)===String(id));if(!row)return;if(row.correction_ref){if(!confirm(`确定撤销整组错单更正吗？\n${dateOf(row)}\n\n两种饮料的库存都会一起恢复，更正记录也会一起删除。`))return;const {error}=await sb.rpc('undo_pos_correction',{p_correction_ref:row.correction_ref});if(error)return alert('撤销失败：'+error.message+'\n\n请确认已经在 Supabase 运行 pos-correction.sql。');undoRestoreMonth=document.getElementById('historyMonthFilter')?.value||currentMonth();await loadAll();const latest=currentItem?items.find(i=>i.id===currentItem.id):null;if(latest){currentItem=latest;renderDrawer(latest);}return;}let effect='';if(row.action==='OUT')effect='库存会把这次出库数量加回原来的位置。';if(row.action==='IN')effect='库存会把这次入库数量从原来的位置扣回。';if(row.action==='BORROW')effect='库存会把这次借出的数量加回原来的位置。';if(row.action==='RETURN')effect='库存会把这次还回的数量从原来的位置扣回。';if(row.action==='TRANSFER')effect='库存会按相反方向移回去。';if(!confirm(`确定撤销这条记录吗？\n${dateOf(row)} · ${actionName(row.action,row)} · 数量 ${Number(row.quantity||0)}\n\n${effect}\n记录也会同时删除。`))return;const {error}=await sb.rpc('undo_inventory_log',{p_log_id:Number(id)});if(error)return alert('撤销失败：'+error.message+'\n\n请确认已经在 Supabase 运行最新版 account-directory-upgrade.sql。');undoRestoreMonth=document.getElementById('historyMonthFilter')?.value||currentMonth();if(currentItem)await loadAll();const latest=currentItem?items.find(i=>i.id===currentItem.id):null;if(latest){currentItem=latest;renderDrawer(latest);}else if(currentItem){await loadProductHistory(currentItem);}}
   wait();
 })();
