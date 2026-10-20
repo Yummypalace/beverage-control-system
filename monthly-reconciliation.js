@@ -678,6 +678,16 @@
     return map;
   }
 
+  function inboundNotesForMonth(){
+    const map=new Map(),resolver=window.InventoryHistoryEngine.createResolver(historyItems());
+    allLogs.forEach(log=>{
+      if(monthOf(log)!==selectedMonth||log.action!=='IN'||log.correction_ref)return;
+      const note=String(log.note||'').trim();if(!note)return;
+      const id=resolver.resolve(log);if(!id)return;
+      const key=String(id);if(!map.has(key))map.set(key,[]);
+      map.get(key).push({date:dateOf(log),qty:num(log.quantity),note});
+    });return map;
+  }
   function posMap(){
     const map=new Map();
     posRows.forEach(r=>map.set(`${r.item_id}|${r.month_key}`,r));
@@ -858,7 +868,10 @@
       return;
     }
 
+    const inboundNotes=inboundNotesForMonth();
     body.innerHTML=rows.map(r=>{
+      const notes=inboundNotes.get(String(r.item.id))||[];
+      const noteBadge=notes.length?'<button type="button" class="recon-inbound-note-btn" data-item-id="'+h(r.item.id)+'">有备注</button>':'';
       const input=r.posValue===null?'':clean(r.posValue);
       const alert=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001&&!r.manualOk;
       return `<tr class="${alert?'recon-alert-row':''}">
@@ -866,7 +879,7 @@
         <td style="text-align:center"><span class="pill category-pill">${h(r.item.category||'-')}</span></td>
         <td>${clean(r.opening)}</td>
         <td>${clean(r.closing)}</td>
-        <td>${clean(r.inbound)}</td>
+        <td><span class="recon-inbound-number">${clean(r.inbound)}</span>${noteBadge}</td>
         <td><b>${clean(r.sold)}</b></td>
         <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}></td>
         <td class="recon-ent-col">${clean(r.ent)}</td>
@@ -886,6 +899,10 @@
       </tr>`;
     }).join('')||'<tr><td colspan="21">暂无饮料资料</td></tr>';
 
+    body.querySelectorAll('.recon-inbound-note-btn').forEach(btn=>btn.onclick=()=>{
+      const notes=inboundNotes.get(String(btn.dataset.itemId))||[];
+      alert(notes.map(x=>x.date+'｜入库 '+x.qty+'｜'+x.note).join('\n'));
+    });
     document.querySelectorAll('#reconInventoryBody .recon-pos-input').forEach(input=>{
       input.addEventListener('input',()=>{
         schedulePosAutoSave(input);
@@ -1460,7 +1477,7 @@
     const s=document.createElement('style');s.id='monthlyReconciliationStyle';s.textContent=`
 #monthlyReconciliation{padding:0 2px 24px}
 .recon-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:4px 0 14px}.recon-head h2{margin:0 0 4px;font-size:22px;color:#102a43}.recon-head>span{font-size:13px;color:#667085;padding-top:5px}
-.recon-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px;background:#f8fafc}.recon-control-left{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}.recon-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px;min-width:190px}.recon-controls select,.recon-controls input{min-height:42px}.recon-search-label{min-width:260px!important}.recon-control-actions{display:flex;gap:8px;align-items:center}.recon-control-actions button{min-height:42px}.recon-lock-export-stack{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:114px}.recon-lock-export-stack button{width:100%;white-space:normal}.recon-autosave-status{display:inline-flex;align-items:center;min-height:42px;padding:0 12px;border-radius:10px;background:#eef2f6;color:#667085;font-size:13px;font-weight:700;white-space:nowrap}.recon-autosave-status[data-state="saving"],.recon-autosave-status[data-state="pending"]{color:#b7791f}.recon-autosave-status[data-state="saved"]{color:#087f5b;background:#edf9f4}.recon-autosave-status[data-state="error"]{color:#c92a2a;background:#fff1f1}.recon-lock-status{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 12px;border-radius:10px;background:#eef2f6;color:#667085;font-size:13px;font-weight:700;white-space:nowrap}.recon-lock-status[data-state="locked"]{background:#edf9f4;color:#087f5b}.recon-lock-status[data-state="open"]{background:#fff7e6;color:#b7791f}.recon-lock-status[data-state="current"]{background:#eef2f6;color:#667085}.recon-pos-error{border-color:#c92a2a!important;box-shadow:0 0 0 2px rgba(201,42,42,.08)!important}
+.recon-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:12px;background:#f8fafc}.recon-control-left{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}.recon-controls label{font-size:12px;color:#667085;font-weight:700;display:flex;flex-direction:column;gap:6px;min-width:190px}.recon-controls select,.recon-controls input{min-height:42px}.recon-search-label{min-width:260px!important}.recon-control-actions{display:flex;gap:8px;align-items:center}.recon-control-actions button{min-height:42px}.recon-inbound-note-btn{display:inline-block;margin:4px 0 0;padding:3px 6px;min-height:0;border-radius:999px;background:#edf3f8!important;color:#315b7d!important;font-size:10px;line-height:1.35;white-space:nowrap}.recon-inbound-number{display:block}.recon-lock-export-stack{display:flex;flex-direction:column;align-items:stretch;gap:8px;min-width:114px}.recon-lock-export-stack button{width:100%;white-space:normal}.recon-autosave-status{display:inline-flex;align-items:center;min-height:42px;padding:0 12px;border-radius:10px;background:#eef2f6;color:#667085;font-size:13px;font-weight:700;white-space:nowrap}.recon-autosave-status[data-state="saving"],.recon-autosave-status[data-state="pending"]{color:#b7791f}.recon-autosave-status[data-state="saved"]{color:#087f5b;background:#edf9f4}.recon-autosave-status[data-state="error"]{color:#c92a2a;background:#fff1f1}.recon-lock-status{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 12px;border-radius:10px;background:#eef2f6;color:#667085;font-size:13px;font-weight:700;white-space:nowrap}.recon-lock-status[data-state="locked"]{background:#edf9f4;color:#087f5b}.recon-lock-status[data-state="open"]{background:#fff7e6;color:#b7791f}.recon-lock-status[data-state="current"]{background:#eef2f6;color:#667085}.recon-pos-error{border-color:#c92a2a!important;box-shadow:0 0 0 2px rgba(201,42,42,.08)!important}
 .recon-summary{display:grid;grid-template-columns:repeat(6,minmax(150px,1fr));gap:10px;margin-bottom:12px}.recon-summary .card{padding:13px 14px}.recon-summary small{display:block;color:#667085}.recon-summary b{display:block;margin-top:5px;font-size:24px;color:#173b5e}
 .recon-guide{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;background:#f7f9fc;color:#475467;font-size:13px;line-height:1.6}.recon-guide b{color:#173b5e;white-space:nowrap}
 .recon-card{padding:14px;margin-top:12px}.recon-card .section-head h3{margin:0;font-size:17px}.recon-sort-btn{background:none!important;color:#667085!important;padding:0!important;border:0!important;border-radius:0!important;font-size:12px!important;font-weight:700!important;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}.recon-sort-btn:hover{color:#173b5e!important}.recon-sort-arrow{font-size:10px;min-width:10px;text-align:center}.recon-ent-head{background:#eef1f4!important;color:#59636e!important}.recon-table tbody td.recon-ent-col{background:#f3f4f6}.recon-ent-actual-input{width:100%;min-width:0;max-width:100%;min-height:34px;padding:6px 8px;background:#fff!important;box-sizing:border-box}.recon-ent-diff{font-weight:700}.recon-table{table-layout:fixed;width:100%;min-width:100%}.recon-table thead th{position:sticky}
