@@ -15,6 +15,9 @@
   let reconSortDir=1;
   const posSaveTimers=new Map();
   const pendingPosSaves=new Map();
+  const posSaveQueues=new Map();
+  let posSavingCount=0;
+  let posSwitching=false;
   const entSaveTimers=new Map();
   const reviewNoteTimers=new Map();
   const staleReviewClearing=new Set();
@@ -362,9 +365,19 @@
 `;
     content.appendChild(section);
 
-    document.getElementById('reconMonth').onchange=()=>{
-      selectedMonth=document.getElementById('reconMonth').value||currentMonth();
-      render();
+    document.getElementById('reconMonth').onchange=async e=>{
+      if(posSwitching)return;
+      const next=e.target.value||currentMonth(),previous=selectedMonth;
+      if(next===previous)return;
+      posSwitching=true;e.target.disabled=true;
+      try{
+        await flushPendingPosSaves();
+        if(pendingPosSaves.size)throw new Error('还有 POS 销量尚未保存，请检查网络后再切换月份');
+        selectedMonth=next;render();
+      }catch(err){
+        selectedMonth=previous;e.target.value=previous;
+        alert(String(err.message||err));
+      }finally{e.target.disabled=false;posSwitching=false;}
     };
     document.getElementById('reconSearch').oninput=()=>render(true);
     document.getElementById('reconReload').onclick=()=>loadData(true);
@@ -1382,83 +1395,69 @@
   }
 
   function schedulePosAutoSave(input,immediate=false){
-    if(isSelectedMonthLocked())return;
-    if(!input||!input.dataset.itemId)return;
-    const itemId=String(input.dataset.itemId);
-    const raw=String(input.value||'').trim();
-    const monthAtSave=selectedMonth;
-
-    const old=posSaveTimers.get(itemId);
-    if(old)clearTimeout(old);
-
+    if(isSelectedMonthLocked()||!input?.dataset.itemId)return;
+    const itemId=String(input.dataset.itemId),raw=String(input.value||'').trim(),monthAtSave=selectedMonth;
+    const key=monthAtSave+'|'+itemId;
+    if(posSaveTimers.has(key))clearTimeout(posSaveTimers.get(key));
+    // Blank is a deliberate unsaved state; do not silently overwrite with zero.
     if(raw===''){
-      pendingPosSaves.delete(itemId);
-      posSaveTimers.delete(itemId);
-      setAutoSaveStatus('POS 自动保存','');
-      return;
+      pendingPosSaves.delete(key);posSaveTimers.delete(key);
+      setAutoSaveStatus('空白未保存','pending');return;
     }
-
-    pendingPosSaves.set(itemId,{itemId,raw,monthAtSave});
+    pendingPosSaves.set(key,{itemId,raw,monthAtSave,key});
     setAutoSaveStatus('等待自动保存…','pending');
-
-    const timer=setTimeout(()=>{
-      posSaveTimers.delete(itemId);
-      const pending=pendingPosSaves.get(itemId);
-      if(pending)saveSinglePosValue(pending);
-    },immediate?0:600);
-
-    posSaveTimers.set(itemId,timer);
+    const timer=setTimeout(()=>{posSaveTimers.delete(key);saveSinglePosValue(pendingPosSaves.get(key));},immediate?0:450);
+    posSaveTimers.set(key,timer);
   }
 
-  async function saveSinglePosValue(pending){
-    if(isSelectedMonthLocked())return false;
-    if(!pending)return false;
-    const {itemId,raw,monthAtSave}=pending;
-    const item=historyItemById(itemId);if(!item)return;
-
-    const q=Number(raw);
-    if(!Number.isFinite(q)||q<0){
-      setAutoSaveStatus('POS 数量不正确','error');
-      return false;
-    }
-
-    setAutoSaveStatus('保存中…','saving');
-    const payload={
-      month_key:monthAtSave,
-      item_id:item.id,
-      item_name:item.name,
-      pos_quantity:q,
-      updated_by:typeof userEmail==='function'?userEmail():'',
-      updated_at:new Date().toISOString()
-    };
-
-    const {data,error}=await retryResult(()=>sb.from('monthly_pos_sales')
-      .upsert(payload,{onConflict:'month_key,item_id'})
-      .select()
-      .single());
-
-    if(error){
-      setAutoSaveStatus('自动保存失败','error');
-      console.error('POS auto-save failed',error);
-      return false;
-    }
-
-    const idx=posRows.findIndex(r=>String(r.item_id)===String(itemId)&&r.month_key===monthAtSave);
-    if(idx>=0)posRows[idx]=data||payload;else posRows.push(data||payload);
-
-    const latest=pendingPosSaves.get(String(itemId));
-    if(latest&&latest.raw===raw&&latest.monthAtSave===monthAtSave){
-      pendingPosSaves.delete(String(itemId));
-    }
-    setAutoSaveStatus('已自动保存 ✓','saved');
-    return true;
+  function saveSinglePosValue(pending){
+    if(!pending)return Promise.resolve(true);
+    const {itemId,monthAtSave,key}=pending;
+    const previous=posSaveQueues.get(key)||Promise.resolve();
+    const task=previous.catch(()=>{}).then(async()=>{
+      const newest=pendingPosSaves.get(key);
+      if(!newest)return true;
+      // Use the newest value when the queued request starts.
+      const raw=newest.raw,q=Number(raw);
+      if(!Number.isFinite(q)||q<0){setAutoSaveStatus('POS 数量不正确','error');return false;}
+      const item=historyItemById(itemId);if(!item)return false;
+      posSavingCount++;setAutoSaveStatus('保存中…','saving');
+      try{
+        const payload={month_key:monthAtSave,item_id:item.id,item_name:item.name,pos_quantity:q,
+          updated_by:typeof userEmail==='function'?userEmail():'',updated_at:new Date().toISOString()};
+        const {data,error}=await retryResult(()=>sb.from('monthly_pos_sales')
+          .upsert(payload,{onConflict:'month_key,item_id'}).select().single());
+        if(error)throw error;
+        const idx=posRows.findIndex(r=>String(r.item_id)===String(itemId)&&r.month_key===monthAtSave);
+        if(idx>=0)posRows[idx]=data||payload;else posRows.push(data||payload);
+        const latest=pendingPosSaves.get(key);
+        if(latest?.raw===raw)pendingPosSaves.delete(key);
+        return true;
+      }catch(e){
+        console.error('POS auto-save failed',e);
+        setAutoSaveStatus('自动保存失败，请重试','error');return false;
+      }finally{
+        posSavingCount--;
+        if(!posSavingCount&&pendingPosSaves.size===0)setAutoSaveStatus('已自动保存 ✓','saved');
+      }
+    });
+    posSaveQueues.set(key,task);
+    return task;
   }
 
-  function flushPendingPosSaves(){
-    posSaveTimers.forEach(timer=>clearTimeout(timer));
-    posSaveTimers.clear();
+  async function flushPendingPosSaves(){
+    posSaveTimers.forEach(timer=>clearTimeout(timer));posSaveTimers.clear();
     const pending=[...pendingPosSaves.values()];
-    pending.forEach(p=>saveSinglePosValue(p));
+    const keys=new Set([...posSaveQueues.keys(),...pending.map(p=>p.key)]);
+    await Promise.all([...keys].map(async key=>{
+      const pendingValue=pendingPosSaves.get(key);
+      if(pendingValue)await saveSinglePosValue(pendingValue);
+      else await posSaveQueues.get(key);
+    }));
+    // A newer edit might have arrived while the preceding request was saving.
+    if(pendingPosSaves.size){
+      await Promise.all([...pendingPosSaves.values()].map(p=>saveSinglePosValue(p)));
+    }
   }
 
   // 离开月结页面、切到其他标签或窗口时，把尚未到 600ms 的输入也立即保存。
