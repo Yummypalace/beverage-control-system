@@ -32,8 +32,20 @@
   }
   function ensureHistoryBox(){ensureHistoryStyle();const drawer=document.getElementById('itemDrawer');if(!drawer||document.getElementById('productHistoryBox'))return;const danger=drawer.querySelector('.danger-zone'),box=document.createElement('div');box.id='productHistoryBox';box.style.marginTop='22px';box.innerHTML=`<div class="section-head"><h3 style="margin:0;font-size:17px">入库 / 出库历史</h3><span id="productHistorySummary" class="hint"></span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:12px 0 14px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#fafbfc"><label style="font-size:12px;color:#6b7280;display:flex;flex-direction:column;gap:5px">月份<select id="historyMonthFilter"></select></label><label style="font-size:12px;color:#6b7280;display:flex;flex-direction:column;gap:5px">操作类型<select id="historyActionFilter"><option value="">全部操作</option><option value="IN">只看入库</option><option value="OUT">只看出库</option><option value="BORROW">只看借出</option><option value="RETURN">只看还回</option><option value="TRANSFER">只看移库</option><option value="ADJUST">只看盘点</option><option value="CREATE">只看新增</option><option value="EDIT">只看编辑</option></select></label><label style="font-size:12px;color:#6b7280;display:flex;flex-direction:column;gap:5px">查找<input id="historyKeywordFilter" placeholder="备注或操作账号"></label><div style="display:flex;align-items:flex-end"><button id="historyResetBtn" class="secondary" style="width:100%">回到本月</button></div></div><div id="historyFilterMessage" class="hint" style="margin-bottom:8px"></div><div class="tablewrap" style="margin-top:8px"><table class="product-history-table"><thead><tr><th>日期</th><th>操作</th><th>数量</th><th>位置 / 备注</th><th>操作人</th><th>操作</th></tr></thead><tbody id="productHistoryBody"><tr><td colspan="6">读取中...</td></tr></tbody></table></div>`;drawer.insertBefore(box,danger||null);document.getElementById('historyMonthFilter').onchange=applyHistoryFilters;document.getElementById('historyActionFilter').onchange=applyHistoryFilters;document.getElementById('historyKeywordFilter').oninput=applyHistoryFilters;document.getElementById('historyResetBtn').onclick=()=>{resetHistoryFilters();applyHistoryFilters();};}
   function availableMonths(){
-    const months=new Set(historyRows.map(r=>dateOf(r).slice(0,7)).filter(m=>/^\d{4}-\d{2}$/.test(m)));
-    months.add(currentMonth());
+    const valid=m=>/^\d{4}-(0[1-9]|1[0-2])$/.test(m);
+    const months=new Set(historyRows.map(r=>dateOf(r).slice(0,7)).filter(valid));
+    const created=String(currentItem?.created_at||'').slice(0,7);
+    const now=currentMonth();
+    const first=[...months,created].filter(valid).sort()[0]||now;
+    if(valid(now)&&first<=now){
+      let [y,m]=first.split('-').map(Number);
+      const [endY,endM]=now.split('-').map(Number);
+      while(y<endY||(y===endY&&m<=endM)){
+        months.add(String(y)+'-'+String(m).padStart(2,'0'));
+        m++;if(m>12){y++;m=1;}
+      }
+    }
+    months.add(now);
     if(undoRestoreMonth&&undoRestoreMonth!=='all')months.add(undoRestoreMonth);
     return [...months].sort((a,b)=>b.localeCompare(a));
   }
