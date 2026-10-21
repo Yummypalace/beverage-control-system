@@ -682,6 +682,29 @@
     return map;
   }
 
+  // 月结沿用原始出库品项；品项开错更正只修改实物库存。
+  // 因为结存已包含更正，月实际减少需抵消更正对结存的影响。
+  function itemCorrectionDeltasForMonth(){
+    const groups=new Map(),deltas=new Map();
+    const resolver=window.InventoryHistoryEngine.createResolver(historyItems());
+    allLogs.forEach(r=>{
+      if(!r.correction_ref||monthOf(r)!==selectedMonth)return;
+      const ref=String(r.correction_ref);
+      if(!groups.has(ref))groups.set(ref,[]);
+      groups.get(ref).push(r);
+    });
+    groups.forEach(group=>{
+      if(!group.some(r=>r.action==='IN')||!group.some(r=>r.action==='OUT'))return;
+      group.forEach(r=>{
+        if(r.action!=='IN'&&r.action!=='OUT')return;
+        const id=resolver.resolve(r);if(!id)return;
+        const key=String(id),change=(r.action==='IN'?1:-1)*num(r.quantity);
+        deltas.set(key,(deltas.get(key)||0)+change);
+      });
+    });
+    return deltas;
+  }
+
   function inboundNotesForMonth(){
     const map=new Map(),resolver=window.InventoryHistoryEngine.createResolver(historyItems());
     allLogs.forEach(log=>{
@@ -745,6 +768,7 @@
     const open=snapshotAt(previousMonthEnd(selectedMonth));
     const close=snapshotAt(monthEnd(selectedMonth));
     const stats=monthStats();
+    const correctionDeltas=itemCorrectionDeltasForMonth();
     const pmap=posMap();
     const rmap=reviewMap();
     const sourceItems=historyItems();
@@ -762,7 +786,7 @@
       const closing=selectedMonth===currentMonth()
         ? num(item.fridge_quantity)+num(item.warehouse_quantity)
         : (closeState&&closeState.exists?num(closeState.total):0);
-      const sold=clean(opening+inbound-closing);
+      const sold=clean(opening+inbound-closing+num(correctionDeltas.get(key)));
 
       let posValue=null;
       if(draftPos&&Object.prototype.hasOwnProperty.call(draftPos,item.id)){
