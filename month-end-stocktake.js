@@ -90,7 +90,7 @@
 
       <div class="card stocktake-info">
         <b>使用方式：</b>
-        <span id="stocktakeInfoText">先用手写盘点单对照月末系统库存。数量一致的不需要处理；发现不一致时，点击该饮料的“盘点调整”，再填写正确库存。系统只按差额修正，不会把今天库存直接覆盖成上个月的数量。</span>
+        <span id="stocktakeInfoText">库存盘点差异使用下方的“盘点调整”；POS 开错饮料、原本也登记了错误品项出库，则使用上方的“品项开错”，一次交换两种饮料的实际库存。POS 销量与原本出库的月结核对不变。月份锁定后不得更正该月份。</span>
       </div>
 
       <div class="stocktake-summary">
