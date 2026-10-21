@@ -934,9 +934,8 @@
     });
     document.querySelectorAll('#reconInventoryBody .recon-pos-input').forEach(input=>{
       input.addEventListener('input',()=>{
-        // Keep the active input and scroll position intact while typing.
-        // The row totals and checks will refresh after editing ends.
         schedulePosAutoSave(input);
+        refreshPosLive(input);
       });
       input.addEventListener('change',()=>schedulePosAutoSave(input,true));
       input.addEventListener('blur',()=>schedulePosAutoSave(input,true));
@@ -1033,6 +1032,21 @@
     document.getElementById('reconIssueTotal').textContent=issue;
   }
 
+  // Update the edited row and month summary in place, without replacing inputs or scrolling.
+  function refreshPosLive(input){
+    const itemId=String(input?.dataset.itemId||'');
+    if(!itemId)return;
+    const rows=computeRows(draftFromInputs());
+    const r=rows.find(x=>String(x.item.id)===itemId);
+    const tr=input.closest('tr');
+    if(r&&tr&&tr.cells.length>=19){
+      tr.cells[17].innerHTML=diffText(r.diff,r.uncertain);
+      tr.cells[18].innerHTML=statusText(r);
+      const warning=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001&&!r.manualOk;
+      tr.classList.toggle('recon-alert-row',warning);
+    }
+    updateSummary(rows);
+  }
   function updateEntDiffCell(input){
     const id=String(input.dataset.itemId||'');
     const cell=document.querySelector('[data-ent-diff-for="'+id+'"]');if(!cell)return;
