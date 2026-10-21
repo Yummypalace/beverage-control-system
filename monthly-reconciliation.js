@@ -934,8 +934,9 @@
     });
     document.querySelectorAll('#reconInventoryBody .recon-pos-input').forEach(input=>{
       input.addEventListener('input',()=>{
+        // Keep the active input and scroll position intact while typing.
+        // The row totals and checks will refresh after editing ends.
         schedulePosAutoSave(input);
-        render(true);
       });
       input.addEventListener('change',()=>schedulePosAutoSave(input,true));
       input.addEventListener('blur',()=>schedulePosAutoSave(input,true));
