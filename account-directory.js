@@ -126,7 +126,7 @@
     const cat=document.getElementById('dashboardCategoryPanel');if(cat)cat.style.display=isAdmin?'block':'none';
     const addBtn=document.getElementById('addBtn');if(addBtn)addBtn.style.display='';
     const drawerEdit=document.getElementById('drawerEditBtn');if(drawerEdit)drawerEdit.style.display='';
-    const drawerDelete=document.getElementById('drawerDeleteBtn');if(drawerDelete)drawerDelete.style.display=isAdmin?'':'none';
+    const drawerDelete=document.getElementById('drawerDeleteBtn');if(drawerDelete)drawerDelete.style.display='';
 
     // User 登录时若上一账号停留在管理设置，则自动返回工作台。
     if(!isAdmin&&settingsLink?.classList.contains('active')&&typeof showPage==='function')showPage('dashboard');
