@@ -1,7 +1,7 @@
 // NO Paid payment status is bookkeeping only; never alters inventory or POS.
 (function(){
   'use strict';
-  let payments=new Map(), busy=false, initialized=false, runId=0;
+  let payments=new Map(), dateDrafts=new Map(), busy=false, initialized=false, runId=0;
   const $=id=>document.getElementById(id);
   const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});
   function wait(){
@@ -18,6 +18,10 @@
     const style=document.createElement('style');
     style.textContent='#outNotes .out-note-payment-head,#outNotes .out-note-payment-cell{white-space:nowrap!important;min-width:112px;text-align:center}#outNotes .no-paid-status{border-radius:999px;padding:6px 11px;font-size:12px;font-weight:700;border:1px solid #d7dee7;background:#f0f2f5;color:#475467;white-space:nowrap}#outNotes .no-paid-status.is-paid{background:#e5f6eb;color:#087f5b;border-color:#bde6c9}#noPaidPaymentDialog input{min-height:40px}';
     document.head.appendChild(style);
+    const paymentDate=$('noPaidPaymentDate');
+    const rememberDate=()=>{const key=d.dataset.logId;if(key&&paymentDate.value)dateDrafts.set(key,paymentDate.value);};
+    paymentDate.addEventListener('input',rememberDate);
+    paymentDate.addEventListener('change',rememberDate);
     $('noPaidPaymentCancel').onclick=()=>d.close();
     $('noPaidPaymentSave').onclick=()=>submit(false);
     $('noPaidPaymentUndo').onclick=()=>submit(true);
@@ -76,7 +80,7 @@
     const date=tr.querySelector('.out-note-date-cell')?.textContent.trim()||'';
     const note=tr.querySelector('.out-note-note-cell')?.textContent.trim()||'';
     $('noPaidPaymentInfo').textContent=name+'｜数量 '+qty+'｜出库日期 '+date+'\n备注：'+(note||'无');
-    $('noPaidPaymentDate').value=record?.payment_date||today();
+    $('noPaidPaymentDate').value=dateDrafts.get(String(tr.dataset.logId))||record?.payment_date||today();
     $('noPaidPaymentDate').min=date||'';
     $('noPaidPaymentNote').value=record?.payment_note||'';
     $('noPaidPaymentUndo').style.display=record?'':'none';
@@ -94,6 +98,8 @@
     try{
       const {error}=await sb.rpc('set_no_paid_payment',{p_log_id:logId,p_payment_date:date,p_payment_note:undo?'':$('noPaidPaymentNote').value.trim()});
       if(error)return alert('保存付款状态失败：'+error.message);
+      if(undo)dateDrafts.delete(String(logId));
+      else dateDrafts.set(String(logId),date);
       d.close();
       await load();
     }finally{busy=false;btn.disabled=false;}
