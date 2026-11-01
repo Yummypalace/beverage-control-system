@@ -93,7 +93,7 @@
   }
   function classifyRow(row){
     const action=(row.querySelector('.out-note-action-cell')?.dataset.action||'').trim();
-    if(['BORROW','RETURN','TRANSFER','ADJUST'].includes(action))return '';
+    if(action!=='OUT')return '';
     const outType=(row.dataset.outType||'').trim();
     if(action==='OUT'){
       if(outType==='NORMAL')return '正常销售';
