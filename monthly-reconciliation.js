@@ -734,7 +734,7 @@
     const map=new Map(),logById=new Map(allLogs.map(x=>[String(x.id),x]));
     for(const payment of noPaidPayments){
       const log=logById.get(String(payment.log_id));
-      if(!log||log.action!=='OUT'||log.out_type!=='NO_PAID')continue;
+      if(!log||log.action!=='OUT'||!(log.out_type==='NO_PAID'||(log.out_type==null&&/no\s*paid|not\s*paid|unpaid|没\s*paid|未付款|没付款/i.test(String(log.note||'')))))continue;
       const consumptionMonth=monthOf(log),paymentMonth=String(payment.payment_date||'').slice(0,7);
       if(!paymentMonth||paymentMonth!==selectedMonth||consumptionMonth===paymentMonth)continue;
       const key=String(log.item_id||'');
@@ -742,7 +742,7 @@
       const entry=map.get(key)||{qty:0,notes:[]};
       const q=num(log.quantity);
       entry.qty=clean(entry.qty+q);
-      entry.notes.push({qty:q,text:Number(consumptionMonth.slice(5))+'月已喝，'+Number(paymentMonth.slice(5))+'月顾客付款'});
+      entry.notes.push({qty:q,text:Number(consumptionMonth.slice(0,4))+'年'+Number(consumptionMonth.slice(5))+'月已喝，'+Number(paymentMonth.slice(0,4))+'年'+Number(paymentMonth.slice(5))+'月顾客付款'});
       map.set(key,entry);
     }
     return map;
