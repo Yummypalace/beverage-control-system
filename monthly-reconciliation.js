@@ -945,7 +945,7 @@
         <td>${clean(r.opening)}</td>
         <td>${clean(r.closing)}</td>
         <td><span class="recon-inbound-number">${clean(r.inbound)}</span>${noteBadge}</td>
-        <td><b>${clean(r.sold)}</b>${r.settlement.qty?'<div class="recon-sub">库存减少 '+clean(r.physicalSold)+' + 跨月付款 '+clean(r.settlement.qty)+'</div>'+r.settlement.notes.map(n=>'<div class="recon-sub">'+h(n.text)+'（'+clean(n.qty)+'）</div>').join(''):''}</td>
+        <td>${r.settlement.qty?`<b>${clean(r.physicalSold)} + ${clean(r.settlement.qty)} = ${clean(r.sold)}</b><button type="button" class="recon-cross-paid-note-btn recon-inbound-note-btn" data-item-id="${h(r.item.id)}" title="查看跨月付款备注">备注</button>`:`<b>${clean(r.sold)}</b>`}</td>
         <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}></td>
         <td class="recon-ent-col">${clean(r.ent)}</td>
         <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(clean(r.entActualValue))}" ${locked?'disabled':''}></td>
@@ -968,6 +968,11 @@
       const notes=inboundNotes.get(String(btn.dataset.itemId))||[];
       const total=clean(notes.reduce((sum,x)=>sum+num(x.qty),0));
       alert('有备注入库：共 '+notes.length+' 笔｜数量合计 '+total+'\n\n'+notes.map(x=>x.date+'｜入库 '+x.qty+'｜'+x.note).join('\n'));
+    });
+    body.querySelectorAll('.recon-cross-paid-note-btn').forEach(btn=>btn.onclick=()=>{
+      const row=allRows.find(r=>String(r.item.id)===String(btn.dataset.itemId));
+      if(!row)return;
+      alert('跨月 NO Paid 付款｜'+row.item.name+'\n\n'+row.settlement.notes.map(n=>n.text+'（'+clean(n.qty)+'）').join('\n')+'\n\n库存减少 '+clean(row.physicalSold)+' + 跨月付款 '+clean(row.settlement.qty)+' = '+clean(row.sold));
     });
     document.querySelectorAll('#reconInventoryBody .recon-pos-input').forEach(input=>{
       input.addEventListener('input',()=>{
