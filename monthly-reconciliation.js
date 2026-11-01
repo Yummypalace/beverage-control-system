@@ -470,6 +470,7 @@
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true})),
+        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true})).catch(e=>{console.warn('NO Paid 付款记录读取失败，先显示原月结',e);return noPaidPayments;}),
         fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true}))
       ]);
       allLogs=logs;
@@ -504,7 +505,7 @@
     if(body&&!hadData)body.innerHTML='<tr><td colspan="21">读取中...</td></tr>';
     if(status)status.textContent='读取中...';
     try{
-      const [logs,pos,entActual,reviews,locks]=await Promise.all([
+      const [logs,pos,entActual,reviews,locks,payments]=await Promise.all([
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
