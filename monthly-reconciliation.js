@@ -9,6 +9,7 @@
   let entActualRows=[];
   let reviewRows=[];
   let lockRows=[];
+  let noPaidPayments=[];
   let loading=false;
   let selectedMonth='';
   let reconSortKey='name';
@@ -296,7 +297,7 @@
 
       <div class="card recon-guide">
         <b>核对公式：</b>
-        <span>上月结存 + 本月入库 − 本月结存 = 本月实际减少；本月实际减少 = POS 销量 + FOC + 厨房使用 + NO Paid + 取消入库 + 其他 + 借出 − 还回。ENT 已包含在 POS 销量内，仅作分类参考。</span>
+        <span>上月结存 + 本月入库 − 本月结存 = 库存实际减少；跨月 NO Paid 在付款月增加月结调整量，显示在本月实际减少栏下方；本月实际减少 = POS 销量 + FOC + 厨房使用 + NO Paid + 取消入库 + 其他 + 借出 − 还回。ENT 已包含在 POS 销量内，仅作分类参考。</span>
       </div>
 
       <div class="card recon-card">
@@ -463,12 +464,13 @@
     if(body&&!hadData)body.innerHTML='<tr><td colspan="21">重新计算中...</td></tr>';
     if(status)status.textContent='重新计算中...';
     try{
-      const [logs,pos,entActual,reviews,locks]=await Promise.all([
+      const [logs,pos,entActual,reviews,locks,payments]=await Promise.all([
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
-        fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true}))
+        fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true})),
+        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true}))
       ]);
       allLogs=logs;
       posRows=pos;
@@ -509,7 +511,7 @@
         fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true}))
       ]);
-      allLogs=logs;posRows=pos;entActualRows=entActual;reviewRows=reviews;lockRows=locks;populateMonths();render(false,draft);
+      allLogs=logs;posRows=pos;entActualRows=entActual;reviewRows=reviews;lockRows=locks;noPaidPayments=payments;populateMonths();render(false,draft);
       if(status)status.textContent='已更新';
     }catch(e){
       console.warn('月结资料读取失败，保留现有资料',e);
@@ -728,6 +730,23 @@
       map.get(key).push({date:dateOf(log),qty:num(log.quantity),note});
     });return map;
   }
+  function crossMonthPaidMap(){
+    const map=new Map(),logById=new Map(allLogs.map(x=>[String(x.id),x]));
+    for(const payment of noPaidPayments){
+      const log=logById.get(String(payment.log_id));
+      if(!log||log.action!=='OUT'||log.out_type!=='NO_PAID')continue;
+      const consumptionMonth=monthOf(log),paymentMonth=String(payment.payment_date||'').slice(0,7);
+      if(!paymentMonth||paymentMonth!==selectedMonth||consumptionMonth===paymentMonth)continue;
+      const key=String(log.item_id||'');
+      if(!key)continue;
+      const entry=map.get(key)||{qty:0,notes:[]};
+      const q=num(log.quantity);
+      entry.qty=clean(entry.qty+q);
+      entry.notes.push({qty:q,text:Number(consumptionMonth.slice(5))+'月已喝，'+Number(paymentMonth.slice(5))+'月顾客付款'});
+      map.set(key,entry);
+    }
+    return map;
+  }
   function posMap(){
     const map=new Map();
     posRows.forEach(r=>map.set(`${r.item_id}|${r.month_key}`,r));
@@ -783,6 +802,7 @@
     const stats=monthStats();
     const correctionDeltas=itemCorrectionDeltasForMonth();
     const pmap=posMap();
+    const crossPaid=crossMonthPaidMap();
     const rmap=reviewMap();
     const sourceItems=historyItems();
     const closeCutoff=monthEnd(selectedMonth);
@@ -799,7 +819,9 @@
       const closing=selectedMonth===currentMonth()
         ? num(item.fridge_quantity)+num(item.warehouse_quantity)
         : (closeState&&closeState.exists?num(closeState.total):0);
-      const sold=clean(opening+inbound-closing+num(correctionDeltas.get(key)));
+      const physicalSold=clean(opening+inbound-closing+num(correctionDeltas.get(key)));
+      const settlement=crossPaid.get(key)||{qty:0,notes:[]};
+      const sold=clean(physicalSold+settlement.qty);
 
       let posValue=null;
       if(draftPos&&Object.prototype.hasOwnProperty.call(draftPos,item.id)){
@@ -843,7 +865,7 @@
         ||hasMonthData;
       if(!relevant)return null;
 
-      return {item,...s,inbound,opening,closing,sold,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
+      return {item,...s,inbound,opening,closing,sold,physicalSold,settlement,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
     }).filter(Boolean);
 
     rows.sort((a,b)=>{
@@ -921,7 +943,7 @@
         <td>${clean(r.opening)}</td>
         <td>${clean(r.closing)}</td>
         <td><span class="recon-inbound-number">${clean(r.inbound)}</span>${noteBadge}</td>
-        <td><b>${clean(r.sold)}</b></td>
+        <td><b>${clean(r.sold)}</b>${r.settlement.qty?'<div class="recon-sub">库存减少 '+clean(r.physicalSold)+' + 跨月付款 '+clean(r.settlement.qty)+'</div>'+r.settlement.notes.map(n=>'<div class="recon-sub">'+h(n.text)+'（'+clean(n.qty)+'）</div>').join(''):''}</td>
         <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}></td>
         <td class="recon-ent-col">${clean(r.ent)}</td>
         <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(clean(r.entActualValue))}" ${locked?'disabled':''}></td>
