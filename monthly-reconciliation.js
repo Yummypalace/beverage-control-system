@@ -510,7 +510,8 @@
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
-        fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true}))
+        fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true})),
+        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true})).catch(e=>{console.warn('NO Paid 付款记录暂时无法读取',e);return [];})
       ]);
       allLogs=logs;posRows=pos;entActualRows=entActual;reviewRows=reviews;lockRows=locks;noPaidPayments=payments;populateMonths();render(false,draft);
       if(status)status.textContent='已更新';
