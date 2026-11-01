@@ -463,6 +463,7 @@
     const hadData=allLogs.length>0||posRows.length>0||entActualRows.length>0;
     if(body&&!hadData)body.innerHTML='<tr><td colspan="21">重新计算中...</td></tr>';
     if(status)status.textContent='重新计算中...';
+    const blankDraft={};
     try{
       const [logs,pos,entActual,reviews,locks,payments]=await Promise.all([
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
@@ -470,15 +471,15 @@
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true})),
-        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true}))
+        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true})).catch(e=>{console.warn('NO Paid 付款读取失败',e);return noPaidPayments;})
       ]);
       allLogs=logs;
       posRows=pos;
       entActualRows=entActual;
       reviewRows=reviews;
       lockRows=locks;
+      noPaidPayments=payments;
       populateMonths();
-      const blankDraft={};
       computeRows().forEach(r=>blankDraft[r.item.id]='');
       render(false,blankDraft);
       if(status)status.textContent='已重新计算';
