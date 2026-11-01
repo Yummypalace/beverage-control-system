@@ -39,6 +39,28 @@
     grid.insertBefore(label,seller||null);
   }
 
+  function ensureInTypeField(){
+    const grid=document.querySelector('#stockDialog .grid2');
+    if(!grid||document.getElementById('stockInTypeWrap'))return;
+    const label=document.createElement('label');
+    label.id='stockInTypeWrap';
+    label.className='hidden';
+    label.innerHTML=`入库类型
+      <select id="stockInType">
+        <option value="NORMAL">正常入库</option>
+        <option value="RESALE_PAID">重卖（已付钱）</option>
+      </select>`;
+    const outWrap=document.getElementById('stockOutTypeWrap');
+    if(outWrap)grid.insertBefore(label,outWrap);
+    else grid.appendChild(label);
+  }
+
+  function syncInTypeVisibility(){
+    const action=document.getElementById('stockAction')?.value||'';
+    const wrap=document.getElementById('stockInTypeWrap');
+    if(wrap)wrap.classList.toggle('hidden',action!=='IN');
+  }
+
   function syncOutTypeVisibility(){
     const wrap=document.getElementById('stockOutTypeWrap');
     const select=document.getElementById('stockOutType');
@@ -51,14 +73,18 @@
     if(installed)return;installed=true;
 
     ensureOutTypeField();
+    ensureInTypeField();
     const actionSelect=document.getElementById('stockAction');
-    if(actionSelect)actionSelect.addEventListener('change',syncOutTypeVisibility);
+    if(actionSelect)actionSelect.addEventListener('change',()=>{syncOutTypeVisibility();syncInTypeVisibility();});
     const previousOpenStock=openStock;
     openStock=function(id,action){
       previousOpenStock(id,action);
       const type=document.getElementById('stockOutType');
       if(type)type.value='NORMAL';
+      const inType=document.getElementById('stockInType');
+      if(inType)inType.value='NORMAL';
       syncOutTypeVisibility();
+      syncInTypeVisibility();
     };
 
     function setItemInventoryEditMode(isEdit){
@@ -113,13 +139,15 @@
 
       try{
         const userNote=(document.getElementById('stockNote').value||'').trim();
+        const inType=action==='IN'?(document.getElementById('stockInType')?.value||'NORMAL'):'NORMAL';
+        const savedNote=action==='IN'&&inType==='RESALE_PAID'?'重卖（已付钱）'+(userNote?'｜'+userNote:''):userNote;
         const {data,error}=await sb.rpc('apply_inventory_change',{
           p_item:x.id,
           p_action:action,
           p_location:loc,
           p_quantity:qty,
           p_operation_date:date,
-          p_note:userNote,
+          p_note:savedNote,
           p_out_type:outType
         });
 
