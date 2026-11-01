@@ -470,7 +470,6 @@
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true})),
-        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true})).catch(e=>{console.warn('NO Paid 付款记录读取失败，先显示原月结',e);return noPaidPayments;}),
         fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true}))
       ]);
       allLogs=logs;
