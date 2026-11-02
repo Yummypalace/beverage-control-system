@@ -970,7 +970,7 @@
         <td class="recon-ent-col recon-ent-diff" data-ent-diff-for="${h(r.item.id)}">${Math.abs(r.entDiff)<0.000001?'<span class="recon-ok">0</span>':`<span class="${r.entDiff>0?'recon-bad':'recon-warn'}">${r.entDiff>0?'+':''}${r.entDiff}</span>`}</td>
         <td>${clean(r.foc)}</td>
         <td>${clean(r.kitchen)}</td>
-        <td>${clean(r.noPaid)}${r.paidThisMonth.qty?'<div class="recon-sub">顾客当月已付款（'+clean(r.paidThisMonth.qty)+'）</div>':''}</td>
+        <td>${clean(r.noPaid)}${r.paidThisMonth.qty?'<div class="recon-sub">顾客当月付钱了（'+clean(r.paidThisMonth.qty)+'）</div>':''}</td>
         <td>${clean(r.cancelIn)}</td>
         <td>${clean(r.borrow)}</td>
         <td>${clean(r.returned)}</td>
