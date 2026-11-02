@@ -732,6 +732,21 @@
       map.get(key).push({date:dateOf(log),qty:num(log.quantity),note});
     });return map;
   }
+  function sameMonthPaidMap(){
+    const map=new Map(),logById=new Map(allLogs.map(x=>[String(x.id),x]));
+    const resolver=window.InventoryHistoryEngine.createResolver(historyItems());
+    for(const payment of noPaidPayments){
+      const log=logById.get(String(payment.log_id));
+      if(!log||log.action!=='OUT'||detectOutType(log)!=='NO_PAID')continue;
+      if(monthOf(log)!==selectedMonth||String(payment.payment_date||'').slice(0,7)!==selectedMonth)continue;
+      const id=resolver.resolve(log);if(!id)continue;
+      const key=String(id),entry=map.get(key)||{qty:0,notes:[]},q=num(log.quantity);
+      entry.qty=clean(entry.qty+q);
+      entry.notes.push({qty:q,date:dateOf(log),paid:payment.payment_date});
+      map.set(key,entry);
+    }
+    return map;
+  }
   function crossMonthPaidMap(){
     const map=new Map(),logById=new Map(allLogs.map(x=>[String(x.id),x]));
     for(const payment of noPaidPayments){
@@ -805,6 +820,7 @@
     const correctionDeltas=itemCorrectionDeltasForMonth();
     const pmap=posMap();
     const crossPaid=crossMonthPaidMap();
+    const samePaid=sameMonthPaidMap();
     const rmap=reviewMap();
     const sourceItems=historyItems();
     const closeCutoff=monthEnd(selectedMonth);
@@ -840,7 +856,9 @@
       const entActualValue=entSaved?num(entSaved.ent_actual):0;
       const entDiff=clean(entActualValue-s.ent);
 
-      const explained=posValue===null?null:posValue+s.foc+s.kitchen+s.noPaid+s.cancelIn+s.other+s.borrow-s.returned;
+      const paidThisMonth=samePaid.get(key)||{qty:0,notes:[]};
+      const remainingNoPaid=clean(Math.max(0,s.noPaid-paidThisMonth.qty));
+      const explained=posValue===null?null:posValue+s.foc+s.kitchen+remainingNoPaid+s.cancelIn+s.other+s.borrow-s.returned;
       const diff=explained===null?null:clean(explained-sold);
       const uncertain=!!(openState?.totalUncertain||closeState?.totalUncertain);
       const review=rmap.get(key+'|'+String(selectedMonth))
@@ -848,7 +866,7 @@
         || null;
       const reviewNote=review?.note||'';
       const reviewable=!uncertain&&diff!==null&&Math.abs(num(diff))>0.000001;
-      const reviewSignature=reconciliationSignature({opening,closing,inbound,sold,posValue,foc:s.foc,kitchen:s.kitchen,noPaid:s.noPaid,cancelIn:s.cancelIn,borrow:s.borrow,returned:s.returned,other:s.other,diff,note:reviewNote});
+      const reviewSignature=reconciliationSignature({opening,closing,inbound,sold,posValue,foc:s.foc,kitchen:s.kitchen,noPaid:remainingNoPaid,cancelIn:s.cancelIn,borrow:s.borrow,returned:s.returned,other:s.other,diff,note:reviewNote});
       const storedManualOk=!!review?.manual_ok;
       const confirmedDiff=review?.confirmed_diff;
       const signatureMatches=String(review?.confirmed_signature||'')===reviewSignature;
@@ -867,7 +885,7 @@
         ||hasMonthData;
       if(!relevant)return null;
 
-      return {item,...s,inbound,opening,closing,sold,physicalSold,settlement,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
+      return {item,...s,noPaid:remainingNoPaid,paidThisMonth,inbound,opening,closing,sold,physicalSold,settlement,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
     }).filter(Boolean);
 
     rows.sort((a,b)=>{
@@ -952,7 +970,7 @@
         <td class="recon-ent-col recon-ent-diff" data-ent-diff-for="${h(r.item.id)}">${Math.abs(r.entDiff)<0.000001?'<span class="recon-ok">0</span>':`<span class="${r.entDiff>0?'recon-bad':'recon-warn'}">${r.entDiff>0?'+':''}${r.entDiff}</span>`}</td>
         <td>${clean(r.foc)}</td>
         <td>${clean(r.kitchen)}</td>
-        <td>${clean(r.noPaid)}</td>
+        <td>${clean(r.noPaid)}${r.paidThisMonth.qty?'<div class="recon-sub">顾客当月已付款（'+clean(r.paidThisMonth.qty)+'）</div>':''}</td>
         <td>${clean(r.cancelIn)}</td>
         <td>${clean(r.borrow)}</td>
         <td>${clean(r.returned)}</td>
