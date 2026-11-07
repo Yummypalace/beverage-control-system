@@ -111,7 +111,7 @@
     const totalMatch=String(repair.note).match(/当前应为\s*([0-9]+(?:\.[0-9]+)?)/);
     if(p.after===null||!totalMatch)return null;
     let fridge=clean(p.after),warehouse=clean(num(totalMatch[1])-fridge);
-    const next=(rows||[]).filter(r=>r!==repair&&dateOf(r)>='2026-10-19'&&dateOf(r)<=cutoff)
+    const next=(rows||[]).filter(r=>r!==repair&&String(r.created_at||'')>String(repair.created_at||'')&&dateOf(r)>='2026-10-19'&&dateOf(r)<=cutoff)
       .sort((a,b)=>dateOf(a).localeCompare(dateOf(b))||createdSort(a,b));
     for(const r of next){
       const action=String(r.action||''),q=num(r.quantity),note=String(r.note||''),loc=locationOf(note);
