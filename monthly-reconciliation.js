@@ -973,7 +973,7 @@
         <td>${clean(r.takeaway)}</td>
         <td>${clean(r.foc)}</td>
         <td>${clean(r.kitchen)}</td>
-        <td>${clean(r.noPaid)}${r.paidThisMonth.qty?'<div class="recon-sub">顾客当月付钱了（'+clean(r.paidThisMonth.qty)+'）</div>':''}</td>
+        <td>${clean(r.noPaid)}${r.paidThisMonth.qty?`<button type="button" class="recon-same-paid-note-btn recon-inbound-note-btn" data-item-id="${h(r.item.id)}" title="查看顾客饮用日期与付款日期">备注</button>`:''}</td>
         <td>${clean(r.cancelIn)}</td>
         <td>${clean(r.borrow)}</td>
         <td>${clean(r.returned)}</td>
@@ -989,6 +989,15 @@
       const notes=inboundNotes.get(String(btn.dataset.itemId))||[];
       const total=clean(notes.reduce((sum,x)=>sum+num(x.qty),0));
       alert('有备注入库：共 '+notes.length+' 笔｜数量合计 '+total+'\n\n'+notes.map(x=>x.date+'｜入库 '+x.qty+'｜'+x.note).join('\n'));
+    });
+    body.querySelectorAll('.recon-same-paid-note-btn').forEach(btn=>btn.onclick=()=>{
+      const row=allRows.find(r=>String(r.item.id)===String(btn.dataset.itemId));
+      if(!row||!row.paidThisMonth.notes.length)return;
+      const entries=row.paidThisMonth.notes
+        .slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.paid).localeCompare(String(b.paid)));
+      alert('NO Paid 当月付款｜'+row.item.name+
+        '\n共 '+entries.length+' 笔｜合计 '+clean(row.paidThisMonth.qty)+' 瓶'+
+        '\n\n'+entries.map((n,i)=>(i+1)+'. 喝：'+n.date+'｜付款：'+n.paid+'｜'+clean(n.qty)+'瓶').join('\n'));
     });
     body.querySelectorAll('.recon-cross-paid-note-btn').forEach(btn=>btn.onclick=()=>{
       const row=allRows.find(r=>String(r.item.id)===String(btn.dataset.itemId));
