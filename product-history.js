@@ -6,7 +6,7 @@
   function currentMonth(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'}).slice(0,7);}
   function monthLabel(v){const [y,m]=String(v||'').split('-');return y&&m?`${y}年${Number(m)}月`:'';}
   function monthEnd(v){const [y,m]=String(v||'').split('-').map(Number);return y&&m?new Date(Date.UTC(y,m,0)).toISOString().slice(0,10):'';}
-  function wait(){if(typeof renderDrawer!=='function'||typeof sb==='undefined'){setTimeout(wait,120);return;}install();}
+  function wait(){if(typeof renderDrawer!=='function'||typeof sb==='undefined'||!window.InventoryHistoryEngine){setTimeout(wait,120);return;}install();}
   function install(){const oldRenderDrawer=renderDrawer;renderDrawer=function(x){oldRenderDrawer(x);currentItem=x;ensureHistoryBox();resetHistoryFilters();loadProductHistory(x);};}
   function ensureHistoryStyle(){
     if(document.getElementById('productHistoryTableStyle'))return;
@@ -77,31 +77,15 @@
     return m?Number(m[1])+Number(m[2]):Number(r.quantity||0);
   }
   function closingAt(month){
-    const cutoff=monthEnd(month);
-    // Use the same historical stock engine as month-end stocktake and reconciliation.
-    // In particular, the verified Coke repair is an anchor, not an extra receipt.
-    if(currentItem&&window.InventoryHistoryEngine){
-      const state=window.InventoryHistoryEngine.snapshotItem(currentItem,[currentItem],historyRows,cutoff,{excludeStocktakeAdjustments:false});
-      if(state&&state.exists&&!state.totalUncertain)return Number(state.total.toFixed(2));
-    }
-    let total=0,exists=false;
-    const rows=[...historyRows].sort((a,b)=>{
-      const da=dateOf(a),db=dateOf(b);
-      if(da!==db)return da.localeCompare(db);
-      const ca=String(a.created_at||''),cb=String(b.created_at||'');
-      if(ca!==cb)return ca.localeCompare(cb);
-      return Number(a.id||0)-Number(b.id||0);
-    });
-    for(const r of rows){
-      if(dateOf(r)>cutoff)break;
-      const q=Number(r.quantity||0);
-      if(r.action==='CREATE'){total=parseCreateTotal(r);exists=true;continue;}
-      if(!exists)exists=true;
-      if(r.action==='IN'||r.action==='RETURN')total+=q;
-      else if(r.action==='OUT'||r.action==='BORROW')total-=q;
-      else if(r.action==='ADJUST'&&!(String(r.item_name||'')==='Coke 可乐'&&String(r.note||'').includes('修正9月20日补录13瓶后对当前库存的重复扣减')))total+=parseAdjustDelta(r.note);
-    }
-    return exists?Number(total.toFixed(2)):0;
+    // Shared history engine is required. Never fall back to a differently
+    // ordered replay: a backdated OUT entered after CREATE would be missed.
+    if(!currentItem||!window.InventoryHistoryEngine)return '—';
+    const state=window.InventoryHistoryEngine.snapshotItem(
+      currentItem,[currentItem],historyRows,monthEnd(month),
+      {excludeStocktakeAdjustments:false}
+    );
+    if(!state||!state.exists||state.totalUncertain)return '—';
+    return Number(state.total.toFixed(2));
   }
   function applyHistoryFilters(){
     const body=document.getElementById('productHistoryBody'),summary=document.getElementById('productHistorySummary'),message=document.getElementById('historyFilterMessage');if(!body)return;
