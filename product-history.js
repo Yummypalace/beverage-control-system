@@ -78,6 +78,12 @@
   }
   function closingAt(month){
     const cutoff=monthEnd(month);
+    // Use the same historical stock engine as month-end stocktake and reconciliation.
+    // In particular, the verified Coke repair is an anchor, not an extra receipt.
+    if(currentItem&&window.InventoryHistoryEngine){
+      const state=window.InventoryHistoryEngine.snapshotItem(currentItem,[currentItem],historyRows,cutoff,{excludeStocktakeAdjustments:false});
+      if(state&&state.exists&&!state.totalUncertain)return Number(state.total.toFixed(2));
+    }
     let total=0,exists=false;
     const rows=[...historyRows].sort((a,b)=>{
       const da=dateOf(a),db=dateOf(b);
