@@ -77,8 +77,9 @@
     return m?Number(m[1])+Number(m[2]):Number(r.quantity||0);
   }
   function closingAt(month){
-    // Shared history engine is required. Never fall back to a differently
-    // ordered replay: a backdated OUT entered after CREATE would be missed.
+    // Month-end stock follows the same date-aware history engine as stocktake
+    // and reconciliation. This handles backdated OUT, historical EDIT anchors,
+    // and stocktake ADJUST without the old inflated/negative balances.
     if(!currentItem||!window.InventoryHistoryEngine)return '—';
     const state=window.InventoryHistoryEngine.snapshotItem(
       currentItem,[currentItem],historyRows,monthEnd(month),
