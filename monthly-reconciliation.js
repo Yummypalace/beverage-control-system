@@ -462,7 +462,7 @@
     const status=document.getElementById('reconStatus');
     const body=document.getElementById('reconInventoryBody');
     const hadData=allLogs.length>0||posRows.length>0||entActualRows.length>0;
-    if(body&&!hadData)body.innerHTML='<tr><td colspan="21">重新计算中...</td></tr>';
+    if(body&&!hadData)body.innerHTML='<tr><td colspan="22">重新计算中...</td></tr>';
     if(status)status.textContent='重新计算中...';
     const blankDraft={};
     try{
@@ -490,7 +490,7 @@
         render(false,blankDraft);
         if(status)status.textContent='重新计算失败，已保留现有资料';
       }else{
-        if(body)body.innerHTML=`<tr><td colspan="21">重新计算失败：${h(e.message||e)}</td></tr>`;
+        if(body)body.innerHTML=`<tr><td colspan="22">重新计算失败：${h(e.message||e)}</td></tr>`;
         if(status)status.textContent='重新计算失败';
       }
     }finally{loading=false;}
@@ -522,7 +522,7 @@
         render(false,draft);
         if(status)status.textContent='读取失败，已保留现有资料';
       }else{
-        if(body)body.innerHTML=`<tr><td colspan="21">读取失败：${h(e.message||e)}</td></tr>`;
+        if(body)body.innerHTML=`<tr><td colspan="22">读取失败：${h(e.message||e)}</td></tr>`;
         if(status)status.textContent='读取失败';
       }
     }finally{loading=false;}
@@ -803,7 +803,6 @@
       normalizedReviewNumber(values.inbound),
       normalizedReviewNumber(values.sold),
       normalizedReviewNumber(values.posValue),
-      normalizedReviewNumber(values.takeaway),
       normalizedReviewNumber(values.foc),
       normalizedReviewNumber(values.kitchen),
       normalizedReviewNumber(values.noPaid),
@@ -813,7 +812,7 @@
       normalizedReviewNumber(values.other),
       normalizedReviewNumber(values.diff),
       String(values.note||'').trim()
-    ].join('|');
+    ].join('|')+(num(values.takeaway)?'|TAKEAWAY:'+normalizedReviewNumber(values.takeaway):'');
   }
 
   function computeRows(draftPos){
