@@ -744,7 +744,7 @@
       const id=resolver.resolve(log);if(!id)continue;
       const key=String(id),entry=map.get(key)||{qty:0,notes:[]},q=num(log.quantity);
       entry.qty=clean(entry.qty+q);
-      entry.notes.push({qty:q,date:dateOf(log),paid:payment.payment_date});
+      entry.notes.push({qty:q,date:dateOf(log),paid:payment.payment_date,note:String(log.note||'').replace(/^(冰箱|仓库)\s*｜\s*/,'').trim()});
       map.set(key,entry);
     }
     return map;
@@ -973,7 +973,7 @@
         <td>${clean(r.takeaway)}</td>
         <td>${clean(r.foc)}</td>
         <td>${clean(r.kitchen)}</td>
-        <td>${clean(r.noPaid)}${r.paidThisMonth.qty?`<button type="button" class="recon-same-paid-note-btn recon-inbound-note-btn" data-item-id="${h(r.item.id)}" title="查看顾客饮用日期与付款日期">备注</button>`:''}</td>
+        <td>${clean(r.noPaid)}${r.paidThisMonth.qty?`<div class="recon-sub"><button type="button" class="recon-same-paid-note-btn recon-inbound-note-btn" data-item-id="${h(r.item.id)}" title="查看 NO Paid 记录日期与付款日期">备注</button></div>`:''}</td>
         <td>${clean(r.cancelIn)}</td>
         <td>${clean(r.borrow)}</td>
         <td>${clean(r.returned)}</td>
@@ -995,9 +995,14 @@
       if(!row||!row.paidThisMonth.notes.length)return;
       const entries=row.paidThisMonth.notes
         .slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.paid).localeCompare(String(b.paid)));
+      const shortDate=d=>{
+        const parts=String(d||'').split('-');
+        return parts.length===3?(Number(parts[1])+'月'+Number(parts[2])+'日'):String(d||'');
+      };
       alert('NO Paid 当月付款｜'+row.item.name+
         '\n共 '+entries.length+' 笔｜合计 '+clean(row.paidThisMonth.qty)+' 瓶'+
-        '\n\n'+entries.map((n,i)=>(i+1)+'. 喝：'+n.date+'｜付款：'+n.paid+'｜'+clean(n.qty)+'瓶').join('\n'));
+        '\n\n'+entries.map((n,i)=>(i+1)+'. '+(n.note?n.note+'｜':'')+
+          'NO Paid：'+shortDate(n.date)+'｜付款：'+shortDate(n.paid)+'｜'+clean(n.qty)+'瓶').join('\n'));
     });
     body.querySelectorAll('.recon-cross-paid-note-btn').forEach(btn=>btn.onclick=()=>{
       const row=allRows.find(r=>String(r.item.id)===String(btn.dataset.itemId));
