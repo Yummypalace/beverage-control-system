@@ -98,7 +98,52 @@
     return new Date(item.archived_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});
   }
 
+  // This one-off historical stock repair established Coke's 126-unit total at
+  // the end of 2026-10-18 (fridge 30, warehouse 96). The Oct 18 sales were
+  // entered after the repair but already included in that 126-unit baseline.
+  // Replaying those late entries would double-deduct them.
+  function repairedCokeSnapshot(item,rows,cutoff){
+    if(String(item?.id||'')!=='54ac86c4-d1aa-4ac8-ab24-07f416c87d10'||cutoff<'2026-10-20')return null;
+    const marker='修正9月20日补录13瓶后对当前库存的重复扣减';
+    const repair=(rows||[]).find(r=>r.action==='ADJUST'&&String(r.note||'').includes(marker));
+    if(!repair)return null;
+    const p=parseAdjust(repair.note,repair.quantity);
+    const totalMatch=String(repair.note).match(/当前应为\s*([0-9]+(?:\.[0-9]+)?)/);
+    if(p.after===null||!totalMatch)return null;
+    let fridge=clean(p.after),warehouse=clean(num(totalMatch[1])-fridge);
+    const next=(rows||[]).filter(r=>r!==repair&&dateOf(r)>='2026-10-19'&&dateOf(r)<=cutoff)
+      .sort((a,b)=>dateOf(a).localeCompare(dateOf(b))||createdSort(a,b));
+    for(const r of next){
+      const action=String(r.action||''),q=num(r.quantity),note=String(r.note||''),loc=locationOf(note);
+      if(action==='IN'||action==='RETURN'){
+        if(loc==='fridge')fridge+=q;else if(loc==='warehouse')warehouse+=q;
+        else return null;
+      }else if(action==='OUT'||action==='BORROW'){
+        if(loc==='fridge')fridge-=q;else if(loc==='warehouse')warehouse-=q;
+        else return null;
+      }else if(action==='TRANSFER'){
+        if(note.includes('仓库 → 冰箱')){warehouse-=q;fridge+=q;}
+        else if(note.includes('冰箱 → 仓库')){fridge-=q;warehouse+=q;}
+        else return null;
+      }else if(action==='ADJUST'){
+        const adjust=parseAdjust(note,q);
+        if(adjust.after===null)return null;
+        if(adjust.location==='fridge')fridge=adjust.after;
+        else if(adjust.location==='warehouse')warehouse=adjust.after;
+        else return null;
+      }else if(action==='EDIT'){
+        const pair=parsePair(note,true);
+        if(pair){fridge=pair.fridge;warehouse=pair.warehouse;}
+      }
+    }
+    return {exists:true,fridge:clean(fridge),warehouse:clean(warehouse),
+      total:clean(fridge+warehouse),uncertain:false,totalUncertain:false,
+      locationUncertain:false,source:'verified-2026-10-18-repair'};
+  }
+
   function snapshotItemFromRows(item,rows,cutoff,options={}){
+    const repaired=repairedCokeSnapshot(item,rows,cutoff);
+    if(repaired)return repaired;
     const month=String(cutoff||'').slice(0,7);
     const excludeStocktake=options.excludeStocktakeAdjustments===true;
     const eligible=(rows||[]).filter(r=>{
