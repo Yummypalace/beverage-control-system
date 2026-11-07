@@ -112,6 +112,7 @@
   function choose(mode){
     selectedMode=mode;
     $('noPaidSettlementFields').hidden=false;
+    $('noPaidPaymentDate').closest('label').hidden=mode==='BILLED';
     $('noPaidPaymentSave').hidden=false;
     $('noPaidChoosePaid').classList.toggle('is-selected',mode==='PAID');
     $('noPaidChooseBilled').classList.toggle('is-selected',mode==='BILLED');
@@ -142,7 +143,7 @@
   async function submit(undo){
     if(busy)return;
     const d=$('noPaidPaymentDialog'),logId=Number(d.dataset.logId);
-    const date=undo?null:$('noPaidPaymentDate').value;
+    const date=undo?null:(selectedMode==='BILLED'?today():$('noPaidPaymentDate').value);
     if(!undo&&!date)return alert('请选择日期');
     if(undo&&!confirm('确定将这笔记录恢复为未付款？'))return;
     busy=true;
