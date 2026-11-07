@@ -750,6 +750,9 @@
     const map=new Map(),logById=new Map(allLogs.map(x=>[String(x.id),x]));
     const resolver=window.InventoryHistoryEngine.createResolver(historyItems());
     for(const payment of noPaidPayments){
+      // Accountant-billed debts have no POS entry; they never contribute to
+      // either same-month POS settlement or payment-month adjustments.
+      if(payment.settlement_type==='BILLED')continue;
       const log=logById.get(String(payment.log_id));
       if(!log||log.action!=='OUT'||detectOutType(log)!=='NO_PAID')continue;
       if(monthOf(log)!==selectedMonth||String(payment.payment_date||'').slice(0,7)!==selectedMonth)continue;
@@ -764,6 +767,9 @@
   function crossMonthPaidMap(){
     const map=new Map(),logById=new Map(allLogs.map(x=>[String(x.id),x]));
     for(const payment of noPaidPayments){
+      // Accountant-billed debts have no POS entry; they never contribute to
+      // either same-month POS settlement or payment-month adjustments.
+      if(payment.settlement_type==='BILLED')continue;
       const log=logById.get(String(payment.log_id));
       if(!log||log.action!=='OUT'||!(log.out_type==='NO_PAID'||(log.out_type==null&&/no\s*paid|not\s*paid|unpaid|没\s*paid|未付款|没付款/i.test(String(log.note||'')))))continue;
       const consumptionMonth=monthOf(log),paymentMonth=String(payment.payment_date||'').slice(0,7);
