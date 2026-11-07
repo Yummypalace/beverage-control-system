@@ -98,7 +98,6 @@
       const record=settlements.get(String(tr.dataset.logId));
       const billed=record?.settlement_type==='BILLED';
       const label=!noPaid?'':record?(billed?'已 Bill':'已付款'):'未付款';
-      if(td.dataset.label===label)return;
       td.dataset.label=label;
       td.replaceChildren();
       if(!noPaid)return;
