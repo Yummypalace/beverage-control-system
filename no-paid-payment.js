@@ -89,7 +89,7 @@
       const action=tr.querySelector('.out-note-action-cell')?.dataset.action;
       const inferred=(tr.querySelector('.out-note-category-pill')?.textContent||'').trim()==='NO Paid';
       const legacyNote=(tr.querySelector('.out-note-note-cell')?.textContent||'');
-      const noPaid=action==='OUT'&&(tr.dataset.outType==='NO_PAID'||(!tr.dataset.outType&&(inferred||/no\\s*paid|not\\s*paid|unpaid|没\\s*paid|未付款|没付款/i.test(legacyNote))));
+      const noPaid=action==='OUT'&&(tr.dataset.outType==='NO_PAID'||(!tr.dataset.outType&&(inferred||/no\s*paid|not\s*paid|unpaid|没\s*paid|未付款|没付款/i.test(legacyNote))));
       let td=tr.querySelector('.out-note-payment-cell');
       if(!td){
         td=document.createElement('td');td.className='out-note-payment-cell';
@@ -128,7 +128,7 @@
     const qty=tr.querySelector('.out-note-qty-cell')?.textContent.trim()||'';
     const date=tr.querySelector('.out-note-date-cell')?.textContent.trim()||'';
     const note=tr.querySelector('.out-note-note-cell')?.textContent.trim()||'';
-    $('noPaidPaymentInfo').textContent=name+'｜数量 '+qty+'｜出库日期 '+date+'\\n备注：'+(note||'无');
+    $('noPaidPaymentInfo').textContent=name+'｜数量 '+qty+'｜出库日期 '+date+'\n备注：'+(note||'无');
     $('noPaidPaymentDate').value=dateDrafts.get(String(tr.dataset.logId))||record?.payment_date||today();
     $('noPaidPaymentDate').min=date||'';
     $('noPaidPaymentNote').value=record?.payment_note||'';
