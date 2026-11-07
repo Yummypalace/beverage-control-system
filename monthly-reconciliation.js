@@ -119,15 +119,15 @@
   function reconWidthLimits(index){
     const th=document.querySelector(`#monthlyReconciliation .recon-table thead th:nth-child(${index+1})`);
     const measured=Number(th?.dataset.headerMinWidth);
-    const min=Math.max(Number.isFinite(measured)&&measured>0?measured:42,index===20?114:index===21?136:0);
+    const min=Math.max(Number.isFinite(measured)&&measured>0?measured:42,index===20?76:index===21?96:0);
     let max=240;
     if(index===0)max=520;
     else if(index===1)max=260;
     else if(index===6||index===8)max=220;
     else if(index===18)max=180;
     else if(index===19)max=160;
-    else if(index===20)max=240;
-    else if(index===21)max=200;
+    else if(index===20)max=360;
+    else if(index===21)max=360;
     return {min,max:Math.max(max,min)};
   }
 
@@ -1726,6 +1726,9 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-table tbody td.recon-note-cell{padding-left:10px!important;padding-right:12px!important}
 .recon-table tbody td.recon-confirm-cell{padding-left:4px!important;padding-right:12px!important}
 .recon-table tbody td.recon-note-cell{text-align:right!important;padding-right:4px!important}
+.recon-table tbody td.recon-note-cell:has(> .recon-muted){text-align:center!important}
+.recon-table tbody td.recon-confirm-cell:has(> .recon-muted){text-align:center!important}
+.recon-table thead th:nth-child(21) .recon-col-resizer::after,.recon-table thead th:nth-child(22) .recon-col-resizer::after{opacity:.75;background:#899aab;width:3px}
 .recon-table tbody td.recon-confirm-cell{text-align:left!important}
 .recon-table tbody td.recon-note-cell,.recon-table tbody td.recon-confirm-cell{overflow:visible!important}
 .recon-table tbody td:nth-last-child(2){padding-right:12px!important}
