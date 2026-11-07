@@ -1,4 +1,4 @@
-// 出入库备注页面：库存操作只要填写了人工备注，就集中显示在这里。
+// 出入库备注页面：有人工备注的操作，以及不论有无备注的外卖订单，集中显示在这里。
 // 盘点调整有独立记录区域，不在这里重复显示；系统自动生成的资料记录与错单技术记录也不重复显示。
 (function(){
   'use strict';
@@ -51,6 +51,8 @@
     const action=String(r.action||'');
     if(r.correction_ref)return false;
     if(action==='CREATE'||action==='EDIT'||action==='ADJUST')return false;
+    // Platform takeaway orders must appear here even without a manual note.
+    if(action==='OUT'&&r.out_type==='TAKEAWAY')return true;
     const p=parseNote(r);
     return !!p.note;
   }
@@ -76,7 +78,7 @@
     section.className='panel-anchor';
     section.style.display='none';
     section.innerHTML=`
-      <div class="out-note-head"><div><h2>出入库备注</h2><div class="hint">入库、出库、借出或还回时，只要填写备注都会自动汇总到这里。盘点调整记录请到「盘点调整」页面查看。</div></div><span id="outNoteCount"></span></div>
+      <div class="out-note-head"><div><h2>出入库备注</h2><div class="hint">入库、出库、借出或还回时，填写备注会自动汇总；外卖订单即使没有备注也会显示。盘点调整记录请到「盘点调整」页面查看。</div></div><span id="outNoteCount"></span></div>
       <div id="outNoteFilters" class="card">
         <label>饮料<input id="outNoteItemFilter" list="outNoteItemList" placeholder="全部饮料 / 输入名称搜索" autocomplete="off"><datalist id="outNoteItemList"></datalist></label>
         <label>操作<select id="outNoteActionFilter"><option value="">全部操作</option><option value="IN">入库</option><option value="OUT">出库</option><option value="BORROW">借出</option><option value="RETURN">还回</option><option value="TRANSFER">移库</option></select></label>
