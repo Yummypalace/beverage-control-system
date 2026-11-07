@@ -303,7 +303,7 @@
     body.innerHTML=filtered.map(r=>`<tr data-log-id="${h(r.id||'')}" data-out-type="${h(r.out_type||'')}">
       <td class="out-note-date-cell">${h(r._date)}</td>
       <td class="out-note-item-cell"><b>${h(r.item_name||'')}</b></td>
-      <td class="out-note-action-cell" data-action="${h(r.action||'')}"><span class="pill action-pill action-${h(String(r.action||'').toLowerCase())}">${h(r._actionLabel)}</span>${r.action==='BORROW'?r._loan?.status==='已还'?'<span class="out-note-returned-badge" title="酒水、借出人、位置、数量与日期已匹配">已还</span>':r._loan?.status==='部分已还'?'<span class="out-note-partial-return-badge" title="同一借出人已有部分数量还回">部分已还</span>':r._loan?.status==='待核实'?'<span class="out-note-pending-return-badge" title="已有还回记录，但无法唯一确定对应借出单">待核实</span>':''}</td>
+      <td class="out-note-action-cell" data-action="${h(r.action||'')}"><span class="pill action-pill action-${h(String(r.action||'').toLowerCase())}">${h(r._actionLabel)}</span>${r.action==='BORROW'?r._loan?.status==='已还'?'<span class="out-note-returned-badge" title="酒水、借出人、位置、数量与日期已匹配">已还</span>':r._loan?.status==='部分已还'?'<span class="out-note-partial-return-badge" title="同一借出人已有部分数量还回">部分已还</span>':r._loan?.status==='待核实'?'<span class="out-note-pending-return-badge" title="已有还回记录，但无法唯一确定对应借出单">待核实</span>':'':''}</td>
       <td class="out-note-qty-cell">${Number(r.quantity||0)}</td>
       <td class="out-note-location-cell">${h(r._location||'')}</td>
       <td class="out-note-note-cell">${h(r._businessNote||'')}</td>
