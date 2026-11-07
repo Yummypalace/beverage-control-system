@@ -18,8 +18,9 @@
       <div id="noPaidPaymentInfo" class="hint" style="margin:8px 0 14px;white-space:pre-wrap"></div>
       <div class="no-paid-settlement-choices">
         <button type="button" id="noPaidChoosePaid" class="secondary">已付款 <small>POS 已开单</small></button>
-        <button type="button" id="noPaidChooseBilled" class="secondary">已 Bill <small>会计统一结账，不进 POS</small></button>
+        <button type="button" id="noPaidChooseBilled" class="secondary">已 Bill <small>统一结账，不进 POS</small></button>
       </div>
+      <div id="noPaidSavedSummary" class="hint" hidden style="margin:12px 0 0;padding:10px 12px;background:#edf7f2;border-radius:8px;white-space:pre-wrap"></div>
       <div id="noPaidSettlementFields" hidden>
         <label style="display:block;margin:12px 0">
           <span id="noPaidSettlementDateLabel">付款日期</span>
@@ -112,7 +113,7 @@
   function choose(mode){
     selectedMode=mode;
     $('noPaidSettlementFields').hidden=false;
-    $('noPaidPaymentDate').closest('label').hidden=mode==='BILLED';
+    $('noPaidPaymentDate').closest('label').hidden=false;
     $('noPaidPaymentSave').hidden=false;
     $('noPaidChoosePaid').classList.toggle('is-selected',mode==='PAID');
     $('noPaidChooseBilled').classList.toggle('is-selected',mode==='BILLED');
@@ -129,10 +130,13 @@
     const date=tr.querySelector('.out-note-date-cell')?.textContent.trim()||'';
     const note=tr.querySelector('.out-note-note-cell')?.textContent.trim()||'';
     $('noPaidPaymentInfo').textContent=name+'｜数量 '+qty+'｜出库日期 '+date+'\n备注：'+(note||'无');
-    $('noPaidPaymentDate').value=dateDrafts.get(String(tr.dataset.logId))||record?.payment_date||today();
+    $('noPaidPaymentDate').value=record?.payment_date||dateDrafts.get(String(tr.dataset.logId))||today();
     $('noPaidPaymentDate').min=date||'';
     $('noPaidPaymentNote').value=record?.payment_note||'';
     $('noPaidPaymentUndo').style.display=record?'':'none';
+    const summary=$('noPaidSavedSummary');
+    summary.hidden=!record;
+    summary.textContent=record?('当前已保存：'+(record.settlement_type==='BILLED'?'已 Bill':'已付款')+'｜'+(record.settlement_type==='BILLED'?'Bill 日期：':'付款日期：')+(record.payment_date||'-')+(record.payment_note?'\n备注：'+record.payment_note:'')):'';
     $('noPaidSettlementFields').hidden=true;
     $('noPaidPaymentSave').hidden=true;
     $('noPaidChoosePaid').classList.remove('is-selected');
@@ -143,7 +147,7 @@
   async function submit(undo){
     if(busy)return;
     const d=$('noPaidPaymentDialog'),logId=Number(d.dataset.logId);
-    const date=undo?null:(selectedMode==='BILLED'?today():$('noPaidPaymentDate').value);
+    const date=undo?null:$('noPaidPaymentDate').value;
     if(!undo&&!date)return alert('请选择日期');
     if(undo&&!confirm('确定将这笔记录恢复为未付款？'))return;
     busy=true;
