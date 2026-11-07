@@ -20,7 +20,7 @@
         <button type="button" id="noPaidChoosePaid" class="secondary">已付款 <small>POS 已开单</small></button>
         <button type="button" id="noPaidChooseBilled" class="secondary">已 Bill <small>统一结账，不进 POS</small></button>
       </div>
-      <div id="noPaidSavedSummary" class="hint" hidden style="margin:12px 0 0;padding:10px 12px;background:#edf7f2;border-radius:8px;white-space:pre-wrap"></div>
+      <div id="noPaidSavedSummary" class="hint" hidden style="margin:12px 0 0;padding:12px;background:#f7f9fb;border-radius:8px;white-space:pre-wrap;line-height:1.8"></div>
       <div id="noPaidSettlementFields" hidden>
         <label style="display:block;margin:12px 0">
           <span id="noPaidSettlementDateLabel">付款日期</span>
@@ -51,6 +51,9 @@
       #noPaidPaymentDialog .no-paid-settlement-choices button{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:68px;justify-content:center;border:1px solid #dce4eb;background:#f7f9fc;color:#17324d;border-radius:10px;font-size:15px;font-weight:700}
       #noPaidPaymentDialog .no-paid-settlement-choices small{font-size:11px;color:#667085;font-weight:500}
       #noPaidPaymentDialog .no-paid-settlement-choices button.is-selected{border:2px solid #087f5b;background:#ecf9f3}
+      #noPaidPaymentDialog.is-locked .no-paid-settlement-choices{grid-template-columns:1fr}
+      #noPaidPaymentDialog.is-locked .no-paid-settlement-choices button:not(.is-selected){display:none}
+      #noPaidPaymentDialog.is-locked .no-paid-settlement-choices button.is-selected{cursor:default;pointer-events:none}
       @media(max-width:460px){#noPaidPaymentDialog .no-paid-settlement-choices{grid-template-columns:1fr}}
     `;
     document.head.appendChild(style);
@@ -111,6 +114,7 @@
     });
   }
   function choose(mode){
+    if($('noPaidPaymentDialog').classList.contains('is-locked'))return;
     selectedMode=mode;
     $('noPaidSettlementFields').hidden=false;
     $('noPaidPaymentDate').closest('label').hidden=false;
@@ -134,19 +138,26 @@
     $('noPaidPaymentDate').min=date||'';
     $('noPaidPaymentNote').value=record?.payment_note||'';
     $('noPaidPaymentUndo').style.display=record?'':'none';
+    d.classList.remove('is-locked');
     const summary=$('noPaidSavedSummary');
     summary.hidden=!record;
-    summary.textContent=record?('当前已保存：'+(record.settlement_type==='BILLED'?'已 Bill':'已付款')+'｜'+(record.settlement_type==='BILLED'?'Bill 日期：':'付款日期：')+(record.payment_date||'-')+(record.payment_note?'\n备注：'+record.payment_note:'')):'';
+    summary.textContent=record?((record.settlement_type==='BILLED'?'Bill 日期：':'付款日期：')+(record.payment_date||'-')+'\n'+(record.settlement_type==='BILLED'?'Bill 备注：':'付款备注：')+(record.payment_note||'-')):'';
     $('noPaidSettlementFields').hidden=true;
     $('noPaidPaymentSave').hidden=true;
     $('noPaidChoosePaid').classList.remove('is-selected');
     $('noPaidChooseBilled').classList.remove('is-selected');
-    if(record)choose(record.settlement_type==='BILLED'?'BILLED':'PAID');
+    if(record){
+      selectedMode=record.settlement_type==='BILLED'?'BILLED':'PAID';
+      $('noPaidChoosePaid').classList.toggle('is-selected',selectedMode==='PAID');
+      $('noPaidChooseBilled').classList.toggle('is-selected',selectedMode==='BILLED');
+      d.classList.add('is-locked');
+    }
     d.showModal();
   }
   async function submit(undo){
     if(busy)return;
     const d=$('noPaidPaymentDialog'),logId=Number(d.dataset.logId);
+    if(!undo&&d.classList.contains('is-locked'))return;
     const date=undo?null:$('noPaidPaymentDate').value;
     if(!undo&&!date)return alert('请选择日期');
     if(undo&&!confirm('确定将这笔记录恢复为未付款？'))return;
