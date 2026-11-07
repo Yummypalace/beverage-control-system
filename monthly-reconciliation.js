@@ -75,7 +75,7 @@
   }
 
   const RECON_WIDTHS_KEY='monthlyReconColumnWidthsV4';
-  const RECON_DEFAULT_WIDTHS=[250,90,76,76,76,92,112,66,104,86,66,86,82,86,66,66,66,96,78,210,92];
+  const RECON_DEFAULT_WIDTHS=[250,90,76,76,76,92,112,66,104,86,82,66,86,82,86,66,66,66,78,86,110,128];
 
   function loadReconColumnWidths(){
     try{return JSON.parse(localStorage.getItem(RECON_WIDTHS_KEY)||'{}')||{};}catch(e){return {};}
@@ -119,14 +119,15 @@
   function reconWidthLimits(index){
     const th=document.querySelector(`#monthlyReconciliation .recon-table thead th:nth-child(${index+1})`);
     const measured=Number(th?.dataset.headerMinWidth);
-    const min=Number.isFinite(measured)&&measured>0?measured:42;
+    const min=Math.max(Number.isFinite(measured)&&measured>0?measured:42,index===20?100:index===21?118:0);
     let max=240;
     if(index===0)max=520;
     else if(index===1)max=260;
     else if(index===6||index===8)max=220;
     else if(index===18)max=180;
-    else if(index===19)max=420;
-    else if(index===20)max=160;
+    else if(index===19)max=160;
+    else if(index===20)max=240;
+    else if(index===21)max=200;
     return {min,max:Math.max(max,min)};
   }
 
@@ -991,8 +992,8 @@
         <td>${clean(r.other)}</td>
         <td>${diffText(r.diff,r.uncertain)}</td>
         <td>${statusText(r)}</td>
-        <td><input type="hidden" class="recon-review-note" data-item-id="${h(r.item.id)}" value="${h(r.reviewNote)}"><button type="button" class="recon-review-open secondary" data-item-id="${h(r.item.id)}" title="${h(r.reviewNote||'点击填写月结备注')}" ${locked?'disabled':''}>${r.reviewNote?'已填写':'填写'}</button></td>
-        <td>${r.reviewable?`<button type="button" class="recon-manual-ok ${r.manualOk?'is-ok':''}" data-item-id="${h(r.item.id)}" ${locked?'disabled':''}>${r.manualOk?'OK ✓':'选择 OK'}</button>`:'<span class="recon-muted">—</span>'}</td>
+        <td class="recon-note-cell"><input type="hidden" class="recon-review-note" data-item-id="${h(r.item.id)}" value="${h(r.reviewNote)}">${r.reviewable?`<button type="button" class="recon-review-open secondary" data-item-id="${h(r.item.id)}" title="${h(r.reviewNote||'点击填写月结备注')}" ${locked?'disabled':''}>${r.reviewNote?'已填写':'填写'}</button>`:'<span class="recon-muted">—</span>'}</td>
+        <td class="recon-confirm-cell">${r.reviewable?`<button type="button" class="recon-manual-ok ${r.manualOk?'is-ok':''}" data-item-id="${h(r.item.id)}" ${locked?'disabled':''}>${r.manualOk?'OK ✓':'选择 OK'}</button>`:'<span class="recon-muted">—</span>'}</td>
       </tr>`;
     }).join('')||'<tr><td colspan="22">暂无饮料资料</td></tr>';
 
@@ -1131,6 +1132,36 @@
     if(r&&tr&&tr.cells.length>=22){
       tr.cells[18].innerHTML=diffText(r.diff,r.uncertain);
       tr.cells[19].innerHTML=statusText(r);
+      const noteCell=tr.cells[20];
+      const noteButton=noteCell?.querySelector('.recon-review-open');
+      if(noteCell){
+        if(r.reviewable&&!noteButton){
+          const muted=noteCell.querySelector('.recon-muted');
+          if(muted)muted.remove();
+          const action=document.createElement('button');
+          action.type='button';
+          action.className='recon-review-open secondary';
+          action.dataset.itemId=itemId;
+          action.textContent=r.reviewNote?'已填写':'填写';
+          action.onclick=()=>openReviewEditor(itemId);
+          noteCell.appendChild(action);
+        }else if(!r.reviewable&&noteButton){
+          noteButton.remove();
+          const dash=document.createElement('span');
+          dash.className='recon-muted';
+          dash.textContent='—';
+          noteCell.appendChild(dash);
+        }
+      }
+      const confirmCell=tr.cells[21];
+      if(confirmCell){
+        const okButton=confirmCell.querySelector('.recon-manual-ok');
+        if(!r.reviewable&&okButton)confirmCell.innerHTML='<span class="recon-muted">—</span>';
+        else if(r.reviewable&&!okButton){
+          confirmCell.innerHTML='<button type="button" class="recon-manual-ok" data-item-id="'+itemId+'">选择 OK</button>';
+          confirmCell.querySelector('button').onclick=()=>toggleManualOk(itemId);
+        }
+      }
       const warning=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001&&!r.manualOk;
       tr.classList.toggle('recon-alert-row',warning);
     }
@@ -1686,11 +1717,14 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-table tbody td:first-child{position:sticky;left:0;z-index:2;background:#fff;box-shadow:2px 0 0 #e5e7eb}
 .recon-table tbody tr.recon-alert-row td:first-child{background:#fff7f5}
 .recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-review-note{display:none}.recon-review-open{min-width:58px!important;max-width:100%;padding:6px 9px!important;font-size:12px!important;white-space:nowrap}.recon-manual-ok{min-width:72px;padding:6px 9px;background:#e9edf2;color:#475467;font-size:12px}.recon-manual-ok.is-ok{background:#087f5b;color:#fff}
+.recon-table tbody td.recon-note-cell{padding-left:10px!important;padding-right:12px!important}
+.recon-table tbody td.recon-confirm-cell{padding-left:14px!important;padding-right:12px!important}
+.recon-table tbody td.recon-note-cell,.recon-table tbody td.recon-confirm-cell{overflow:visible!important}
 .recon-table tbody td:nth-last-child(2){padding-right:12px!important}
 .recon-table tbody td:last-child{padding-left:12px!important}
 .recon-table .recon-review-open{display:inline-flex!important;align-items:center;justify-content:center;min-width:64px!important;min-height:36px!important;padding:7px 12px!important;border:1px solid #dce3eb!important;border-radius:10px!important;background:#f0f3f7!important;color:#475569!important;font-size:12px!important;font-weight:650!important;box-shadow:none!important}
 .recon-table .recon-manual-ok{display:inline-flex!important;align-items:center;justify-content:center;gap:4px;min-width:88px!important;min-height:36px!important;padding:7px 13px!important;border:1px solid #dce3eb!important;border-radius:10px!important;background:#edf1f5!important;color:#526173!important;font-size:12px!important;font-weight:700!important;letter-spacing:.2px;white-space:nowrap!important;transition:background .15s ease,box-shadow .15s ease}
-.recon-table .recon-manual-ok.is-ok{background:#07835e!important;border-color:#07835e!important;color:#fff!important;box-shadow:0 2px 6px rgba(7,131,94,.16)!important}
+.recon-table .recon-manual-ok.is-ok{background:#07835e!important;border-color:#07835e!important;color:#fff!important;border-radius:12px!important;min-width:94px!important;box-shadow:0 2px 8px rgba(7,131,94,.20)!important}
 .recon-table .recon-manual-ok.is-ok:hover:not(:disabled){background:#066e50!important}
 .recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
 @media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}}
