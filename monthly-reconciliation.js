@@ -366,6 +366,17 @@
       </div>
 `;
     content.appendChild(section);
+    const noteDialog=document.createElement('dialog');
+    noteDialog.id='reconReviewEditor';
+    noteDialog.className='recon-review-editor-dialog';
+    noteDialog.innerHTML=`<div class="recon-review-editor-head"><h3>月结备注</h3><button type="button" id="reconReviewEditorClose" class="secondary" aria-label="关闭">✕</button></div>
+      <div id="reconReviewEditorItem" class="hint"></div><label for="reconReviewEditorText">备注内容</label>
+      <textarea id="reconReviewEditorText" rows="7" placeholder="请输入月结核对原因或差异说明"></textarea>
+      <div class="recon-review-editor-actions"><button type="button" class="secondary" id="reconReviewEditorCancel">取消</button><button type="button" id="reconReviewEditorSave">保存备注</button></div>`;
+    document.body.appendChild(noteDialog);
+    document.getElementById('reconReviewEditorClose').onclick=()=>noteDialog.close();
+    document.getElementById('reconReviewEditorCancel').onclick=()=>noteDialog.close();
+    document.getElementById('reconReviewEditorSave').onclick=saveReviewEditor;
 
     document.getElementById('reconMonth').onchange=async e=>{
       if(posSwitching)return;
@@ -980,7 +991,7 @@
         <td>${clean(r.other)}</td>
         <td>${diffText(r.diff,r.uncertain)}</td>
         <td>${statusText(r)}</td>
-        <td><input class="recon-review-note" data-item-id="${h(r.item.id)}" value="${h(r.reviewNote)}" placeholder="填写核对原因" ${locked?'disabled':''}></td>
+        <td><input type="hidden" class="recon-review-note" data-item-id="${h(r.item.id)}" value="${h(r.reviewNote)}"><button type="button" class="recon-review-open secondary" data-item-id="${h(r.item.id)}" title="${h(r.reviewNote||'点击填写月结备注')}" ${locked?'disabled':''}>${r.reviewNote?'已填写':'填写'}</button></td>
         <td>${r.reviewable?`<button type="button" class="recon-manual-ok ${r.manualOk?'is-ok':''}" data-item-id="${h(r.item.id)}" ${locked?'disabled':''}>${r.manualOk?'OK ✓':'选择 OK'}</button>`:'<span class="recon-muted">—</span>'}</td>
       </tr>`;
     }).join('')||'<tr><td colspan="22">暂无饮料资料</td></tr>';
@@ -1027,6 +1038,7 @@
       input.addEventListener('blur',()=>scheduleEntAutoSave(input,true));
     });
 
+    document.querySelectorAll('#reconInventoryBody .recon-review-open').forEach(btn=>btn.onclick=()=>openReviewEditor(btn.dataset.itemId));
     document.querySelectorAll('#reconInventoryBody .recon-review-note').forEach(input=>{
       input.addEventListener('input',()=>{
         const itemId=String(input.dataset.itemId||'');
@@ -1183,6 +1195,49 @@
     if(idx>=0)reviewRows[idx]=next;else reviewRows.push(next);
   }
 
+  function openReviewEditor(itemId){
+    if(isSelectedMonthLocked())return;
+    const item=historyItemById(itemId);
+    const dialog=document.getElementById('reconReviewEditor');
+    const editor=document.getElementById('reconReviewEditorText');
+    const input=document.querySelector('.recon-review-note[data-item-id="'+String(itemId)+'"]');
+    if(!item||!dialog||!editor||!input)return;
+    dialog.dataset.itemId=String(itemId);
+    dialog.dataset.month=selectedMonth;
+    document.getElementById('reconReviewEditorItem').textContent=monthLabel(selectedMonth)+' · '+item.name;
+    editor.value=input.value||'';
+    dialog.showModal();
+    editor.focus();
+    editor.setSelectionRange(editor.value.length,editor.value.length);
+  }
+
+  async function saveReviewEditor(){
+    const dialog=document.getElementById('reconReviewEditor');
+    const editor=document.getElementById('reconReviewEditorText');
+    const btn=document.getElementById('reconReviewEditorSave');
+    const itemId=dialog?.dataset.itemId;
+    if(!itemId||!editor||!btn)return;
+    if(dialog.dataset.month!==selectedMonth||isSelectedMonthLocked())return alert('月份已切换或锁定，请重新打开备注');
+    const input=document.querySelector('.recon-review-note[data-item-id="'+String(itemId)+'"]');
+    if(!input)return alert('找不到对应的月结记录，请刷新页面');
+    const changed=input.value!==editor.value;
+    btn.disabled=true;btn.textContent='保存中...';
+    try{
+      if(changed){
+        input.value=editor.value;
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+        const timer=reviewNoteTimers.get(String(itemId));
+        if(timer)clearTimeout(timer);
+        reviewNoteTimers.delete(String(itemId));
+        if(!await saveReview(itemId,{note:editor.value}))throw new Error('保存失败，请检查网络后重试');
+      }
+      dialog.close();
+      render(true);
+    }catch(e){
+      alert('备注保存失败：'+String(e.message||e));
+    }finally{btn.disabled=false;btn.textContent='保存备注';}
+  }
+
   function scheduleReviewNoteSave(input,immediate=false){
     if(isSelectedMonthLocked())return;
     if(!input||!input.dataset.itemId)return;
@@ -1287,9 +1342,8 @@
 
     const next=!row.manualOk;
     if(next&&!String(row.reviewNote||'').trim()){
-      const input=document.querySelector('.recon-review-note[data-item-id="'+String(itemId)+'"]');
-      if(input)input.focus();
       alert('请先填写备注说明为什么这笔差异可以确认 OK。');
+      openReviewEditor(itemId);
       return;
     }
 
@@ -1608,6 +1662,15 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-resize-guide{position:absolute;width:2px;background:#173b5e;opacity:.65;z-index:25;pointer-events:none;box-shadow:0 0 0 1px rgba(255,255,255,.7)}
 .recon-resize-bubble{position:absolute;z-index:26;pointer-events:none;background:#17324d;color:#fff;border-radius:7px;padding:4px 7px;font-size:11px;font-weight:700;line-height:1;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 .recon-table-head{position:relative;min-height:32px}.recon-month-title{position:absolute;left:50%;transform:translateX(-50%);font-size:18px;font-weight:800;color:#173b5e;white-space:nowrap}
+.recon-review-editor-dialog{position:fixed!important;inset:0!important;margin:auto!important;width:min(620px,calc(100vw - 32px))!important;max-width:620px;max-height:calc(100dvh - 32px);border:0!important;border-radius:16px!important;padding:24px!important;box-sizing:border-box;background:#fff!important;color:#17324d;box-shadow:0 24px 70px rgba(0,0,0,.27);overflow:auto;z-index:99999}
+.recon-review-editor-dialog::backdrop{background:rgba(14,29,45,.52)}
+.recon-review-editor-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.recon-review-editor-head h3{font-size:20px!important;margin:0!important}
+.recon-review-editor-head button{min-width:40px!important;padding:6px 10px!important}
+.recon-review-editor-dialog label{display:block;font-size:13px;font-weight:700;margin:20px 0 8px}
+#reconReviewEditorText{display:block;width:100%;min-height:200px;resize:vertical;line-height:1.7;font-size:15px;padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;box-sizing:border-box}
+.recon-review-editor-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+.recon-review-editor-actions button{min-width:100px}
 .recon-review-detail-card{padding:14px;margin-top:12px}
 .recon-review-detail-card .section-head{align-items:flex-start}
 .recon-review-detail-card .section-head h3{margin:0;font-size:17px}
@@ -1622,7 +1685,7 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-table thead th:first-child{left:0;z-index:8;box-shadow:2px 0 0 #e5e7eb}
 .recon-table tbody td:first-child{position:sticky;left:0;z-index:2;background:#fff;box-shadow:2px 0 0 #e5e7eb}
 .recon-table tbody tr.recon-alert-row td:first-child{background:#fff7f5}
-.recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-review-note{width:100%;min-width:0;min-height:34px;padding:6px 8px;box-sizing:border-box}.recon-manual-ok{min-width:72px;padding:6px 9px;background:#e9edf2;color:#475467;font-size:12px}.recon-manual-ok.is-ok{background:#087f5b;color:#fff}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
+.recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-review-note{display:none}.recon-review-open{min-width:58px!important;max-width:100%;padding:6px 9px!important;font-size:12px!important;white-space:nowrap}.recon-manual-ok{min-width:72px;padding:6px 9px;background:#e9edf2;color:#475467;font-size:12px}.recon-manual-ok.is-ok{background:#087f5b;color:#fff}.recon-sub{font-size:11px;color:#98a2b3;margin-top:3px}.recon-ok{color:#087f5b;font-weight:700}.recon-bad{color:#c92a2a;font-weight:700}.recon-warn{color:#b7791f;font-weight:700}.recon-muted{color:#98a2b3}.recon-alert-row{background:#fff7f5}
 @media(max-width:1100px){.recon-summary{grid-template-columns:repeat(2,1fr)}.recon-controls{align-items:stretch;flex-direction:column}.recon-control-left{width:100%}.recon-search-label{flex:1}.recon-control-actions{justify-content:flex-end}}
 @media(max-width:620px){.recon-summary{grid-template-columns:1fr 1fr}.recon-control-actions{display:grid;grid-template-columns:1fr 1fr}.recon-control-actions button{width:100%}.recon-guide{display:block}.recon-guide b{display:block;margin-bottom:4px}}
 `;document.head.appendChild(s);
