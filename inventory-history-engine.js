@@ -177,6 +177,9 @@
         const p=parsePair(note,true);
         if(p)setFull(p.fridge,p.warehouse);
       }else if(action==='ADJUST'){
+        // This specific historical correction only compensated a duplicate live-stock deduction
+        // after a backdated September OUT. Replaying it in October would double count 13 units.
+        if(String(r.item_name||'')==='Coke 可乐'&&note.includes('修正9月20日补录13瓶后对当前库存的重复扣减'))continue;
         const p=parseAdjust(note,q);
         if(p.location&&p.after!==null&&fridge!==null&&warehouse!==null){
           if(p.location==='fridge')fridge=clean(p.after);else warehouse=clean(p.after);
