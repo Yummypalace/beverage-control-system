@@ -226,11 +226,22 @@
         // after a backdated September OUT. Replaying it in October would double count 13 units.
         if(String(r.item_name||'')==='Coke 可乐'&&note.includes('修正9月20日补录13瓶后对当前库存的重复扣减'))continue;
         const p=parseAdjust(note,q);
-        if(p.location&&p.after!==null&&fridge!==null&&warehouse!==null){
-          if(p.location==='fridge')fridge=clean(p.after);else warehouse=clean(p.after);
-          total=clean(fridge+warehouse);
-        }else if(p.before!==null&&p.after!==null){
-          addTotal(p.after-p.before);
+        if(p.before!==null&&p.after!==null){
+          // ADJUST is a delta recorded against the live stock at the time
+          // (e.g. fridge 17 -> 30 means +13), never an absolute overwrite
+          // of historical replay (which may have a different prior balance
+          // because of backdated entries).
+          const delta=clean(p.after-p.before);
+          addTotal(delta);
+          if(fridge!==null&&warehouse!==null&&p.location){
+            if(p.location==='fridge')fridge=clean(fridge+delta);
+            else warehouse=clean(warehouse+delta);
+          }else locationUncertain=true;
+        }else if(p.location&&p.after!==null){
+          // Legacy adjustment without a recorded 'before' cannot establish
+          // a reliable delta. Surface the uncertainty rather than resetting
+          // the balance silently.
+          totalUncertain=true;
           locationUncertain=true;
         }else{
           totalUncertain=true;
