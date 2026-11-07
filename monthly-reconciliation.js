@@ -75,7 +75,7 @@
   }
 
   const RECON_WIDTHS_KEY='monthlyReconColumnWidthsV4';
-  const RECON_DEFAULT_WIDTHS=[250,90,76,76,76,92,112,66,104,86,82,66,86,82,86,66,66,66,78,86,110,128];
+  const RECON_DEFAULT_WIDTHS=[250,90,76,76,76,92,112,66,104,86,82,66,86,82,86,66,66,66,78,86,114,136];
 
   function loadReconColumnWidths(){
     try{return JSON.parse(localStorage.getItem(RECON_WIDTHS_KEY)||'{}')||{};}catch(e){return {};}
@@ -119,7 +119,7 @@
   function reconWidthLimits(index){
     const th=document.querySelector(`#monthlyReconciliation .recon-table thead th:nth-child(${index+1})`);
     const measured=Number(th?.dataset.headerMinWidth);
-    const min=Math.max(Number.isFinite(measured)&&measured>0?measured:42,index===20?100:index===21?118:0);
+    const min=Math.max(Number.isFinite(measured)&&measured>0?measured:42,index===20?114:index===21?136:0);
     let max=240;
     if(index===0)max=520;
     else if(index===1)max=260;
