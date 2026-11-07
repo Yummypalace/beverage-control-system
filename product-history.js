@@ -93,7 +93,7 @@
       if(!exists)exists=true;
       if(r.action==='IN'||r.action==='RETURN')total+=q;
       else if(r.action==='OUT'||r.action==='BORROW')total-=q;
-      else if(r.action==='ADJUST')total+=parseAdjustDelta(r.note);
+      else if(r.action==='ADJUST'&&!(String(r.item_name||'')==='Coke 可乐'&&String(r.note||'').includes('修正9月20日补录13瓶后对当前库存的重复扣减')))total+=parseAdjustDelta(r.note);
     }
     return exists?Number(total.toFixed(2)):0;
   }
