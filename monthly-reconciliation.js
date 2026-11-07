@@ -1724,7 +1724,9 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-table tbody tr.recon-alert-row td:first-child{background:#fff7f5}
 .recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-review-note{display:none}.recon-review-open{min-width:58px!important;max-width:100%;padding:6px 9px!important;font-size:12px!important;white-space:nowrap}.recon-manual-ok{min-width:72px;padding:6px 9px;background:#e9edf2;color:#475467;font-size:12px}.recon-manual-ok.is-ok{background:#087f5b;color:#fff}
 .recon-table tbody td.recon-note-cell{padding-left:10px!important;padding-right:12px!important}
-.recon-table tbody td.recon-confirm-cell{padding-left:14px!important;padding-right:12px!important}
+.recon-table tbody td.recon-confirm-cell{padding-left:4px!important;padding-right:12px!important}
+.recon-table tbody td.recon-note-cell{text-align:right!important;padding-right:4px!important}
+.recon-table tbody td.recon-confirm-cell{text-align:left!important}
 .recon-table tbody td.recon-note-cell,.recon-table tbody td.recon-confirm-cell{overflow:visible!important}
 .recon-table tbody td:nth-last-child(2){padding-right:12px!important}
 .recon-table tbody td:last-child{padding-left:12px!important}
