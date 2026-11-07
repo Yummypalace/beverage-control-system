@@ -63,18 +63,18 @@
   function borrowerName(r){
     const raw=parseNote(r).note;
     if(!raw)return '';
-    let part=raw.replace(/\\b\\d{1,4}[/-]\\d{1,2}[/-]\\d{1,4}\\b/g,' ')
+    let part=raw.replace(/\b\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\b/g,' ')
       .replace(/[（(][^）)]*[）)]/g,' ')
-      .replace(/^\\s*[-–—:：]+\\s*/,'').trim();
+      .replace(/^\s*[-–—:：]+\s*/,'').trim();
     const marker=part.match(/借(?:出|了|的)?|还(?:回|给|会|了|酒|款)/);
     if(marker)part=part.slice(0,marker.index).trim();
-    part=part.replace(/\\b\\d+(?:\\.\\d+)?\\s*(?:箱|支|瓶|罐|杯)\\b/gi,'')
-      .replace(/\\s*(?:下次|待还|已还|归还|借用|借出|还回|还款).*$/,'')
-      .replace(/^[\\s:：,，.。-]+|[\\s:：,，.。-]+$/g,'')
-      .replace(/\\s+/g,' ').trim();
+    part=part.replace(/\b\d+(?:\.\d+)?\s*(?:箱|支|瓶|罐|杯)\b/gi,'')
+      .replace(/\s*(?:下次|待还|已还|归还|借用|借出|还回|还款).*$/,'')
+      .replace(/^[\s:：,，.。-]+|[\s:：,，.。-]+$/g,'')
+      .replace(/\s+/g,' ').trim();
     // Formal titles can vary in hand-written notes; normalize only this
     // conventional suffix, not fuzzy spellings or unrelated people.
-    return part.replace(/\\s+(?:boss|老板)\\s*$/i,'').toLowerCase();
+    return part.replace(/\s+(?:boss|老板)\s*$/i,'').toLowerCase();
   }
 
   function borrowingStatus(allLogs){
