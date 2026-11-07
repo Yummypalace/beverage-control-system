@@ -307,7 +307,9 @@
     const rows=[];
     for(const item of historyItems()){
       const old=existingByItem.get(String(item.id));
-      if(old&&old.actual_fridge!=null&&old.actual_warehouse!=null)continue;
+      // Existing monthly snapshots are historical baselines. Never silently rewrite
+      // them on page refresh (even when no physical count has been entered).
+      if(old)continue;
 
       const snap=snapshotForItem(item,cutoff);
       if(!snap.exists)continue;
