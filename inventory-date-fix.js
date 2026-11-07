@@ -29,11 +29,11 @@
     label.innerHTML=`出库类型
       <select id="stockOutType">
         <option value="NORMAL">正常销售</option>
+        <option value="TAKEAWAY">外卖订单</option>
         <option value="ENT">ENT</option>
         <option value="KITCHEN">厨房使用</option>
         <option value="NO_PAID">NO Paid</option>
         <option value="CANCEL_IN">取消入库</option>
-        <option value="OTHER">其他</option>
       </select>`;
     const seller=document.getElementById('sellerWrap');
     grid.insertBefore(label,seller||null);
