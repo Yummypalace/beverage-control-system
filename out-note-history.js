@@ -57,13 +57,29 @@
     return !!p.note;
   }
 
-  // Reconcile borrow/return quantities by item, storage location and business
-  // date (FIFO). No direct borrow-reference exists in legacy logs, so do not
-  // imply borrower-level certainty or show '已还' unless the entire quantity
-  // is matched by recorded returns.
+  // Legacy logs have no direct link between a borrow and its return.
+  // Match conservatively: identical item, location, borrower identity,
+  // chronological order and quantity. Ambiguous matches stay 待核实.
+  function borrowerName(r){
+    const raw=parseNote(r).note;
+    if(!raw)return '';
+    let part=raw.replace(/\\b\\d{1,4}[/-]\\d{1,2}[/-]\\d{1,4}\\b/g,' ')
+      .replace(/[（(][^）)]*[）)]/g,' ')
+      .replace(/^\\s*[-–—:：]+\\s*/,'').trim();
+    const marker=part.match(/借(?:出|了|的)?|还(?:回|给|会|了|酒|款)/);
+    if(marker)part=part.slice(0,marker.index).trim();
+    part=part.replace(/\\b\\d+(?:\\.\\d+)?\\s*(?:箱|支|瓶|罐|杯)\\b/gi,'')
+      .replace(/\\s*(?:下次|待还|已还|归还|借用|借出|还回|还款).*$/,'')
+      .replace(/^[\\s:：,，.。-]+|[\\s:：,，.。-]+$/g,'')
+      .replace(/\\s+/g,' ').trim();
+    // Formal titles can vary in hand-written notes; normalize only this
+    // conventional suffix, not fuzzy spellings or unrelated people.
+    return part.replace(/\\s+(?:boss|老板)\\s*$/i,'').toLowerCase();
+  }
+
   function borrowingStatus(allLogs){
-    const balances=new Map();
     const loans=new Map();
+    const queues=new Map();
     const ordered=(allLogs||[]).filter(r=>!r.correction_ref&&
       (r.action==='BORROW'||r.action==='RETURN'))
       .sort((a,b)=>dateOf(a).localeCompare(dateOf(b))||
@@ -71,28 +87,34 @@
         Number(a.id||0)-Number(b.id||0));
 
     for(const r of ordered){
-      const loc=parseNote(r).location;
       const itemKey=String(r.item_id||r.item_name||'');
-      if(!itemKey||!loc)continue;
-      const key=itemKey+'|'+loc;
+      const location=parseNote(r).location;
+      const name=borrowerName(r);
       const qty=Number(r.quantity||0);
-      if(!Number.isFinite(qty)||qty<=0)continue;
-      if(!balances.has(key))balances.set(key,[]);
-      const queue=balances.get(key);
+      if(!itemKey||!location||!Number.isFinite(qty)||qty<=0)continue;
+      const key=itemKey+'|'+location+'|'+name;
       if(r.action==='BORROW'){
-        const loan={quantity:qty,returned:0,returns:[]};
+        const loan={quantity:qty,returned:0,returns:[],name,status:'待核实'};
         loans.set(String(r.id),loan);
-        queue.push(loan);
+        if(name){
+          if(!queues.has(key))queues.set(key,[]);
+          queues.get(key).push(loan);
+        }
       }else{
-        let remaining=qty;
-        for(const loan of queue){
-          if(remaining<=0)break;
-          const available=Math.max(0,loan.quantity-loan.returned);
-          const applied=Math.min(remaining,available);
-          if(applied<=0)continue;
-          loan.returned+=applied;
-          loan.returns.push({date:dateOf(r),quantity:applied});
-          remaining-=applied;
+        // A return without a usable borrower name cannot safely settle a loan.
+        const candidates=(queues.get(key)||[]).filter(x=>x.returned<x.quantity-0.000001);
+        const exact=candidates.filter(x=>Math.abs((x.quantity-x.returned)-qty)<0.000001);
+        // Only attribute a return when one borrower-and-quantity candidate exists.
+        if(exact.length===1){
+          const loan=exact[0];
+          loan.returned=loan.quantity;
+          loan.returns.push({date:dateOf(r),quantity:qty});
+          loan.status='已还';
+        }else if(candidates.length===1&&qty<candidates[0].quantity-candidates[0].returned){
+          const loan=candidates[0];
+          loan.returned+=qty;
+          loan.returns.push({date:dateOf(r),quantity:qty});
+          loan.status='部分已还';
         }
       }
     }
@@ -275,7 +297,7 @@
     body.innerHTML=filtered.map(r=>`<tr data-log-id="${h(r.id||'')}" data-out-type="${h(r.out_type||'')}">
       <td class="out-note-date-cell">${h(r._date)}</td>
       <td class="out-note-item-cell"><b>${h(r.item_name||'')}</b></td>
-      <td class="out-note-action-cell" data-action="${h(r.action||'')}"><span class="pill action-pill action-${h(String(r.action||'').toLowerCase())}">${h(r._actionLabel)}</span>${r.action==='BORROW'&&r._loan&&r._loan.returned>=r._loan.quantity-0.000001?'<span class="out-note-returned-badge" title="已根据同饮料、同位置的还回记录核对">已还</span>':r.action==='BORROW'&&r._loan&&r._loan.returned>0?'<span class="out-note-partial-return-badge" title="部分数量已归还">部分已还</span>':''}</td>
+      <td class="out-note-action-cell" data-action="${h(r.action||'')}"><span class="pill action-pill action-${h(String(r.action||'').toLowerCase())}">${h(r._actionLabel)}</span>${r.action==='BORROW'?r._loan?.status==='已还'?'<span class="out-note-returned-badge" title="酒水、借出人、位置、数量与日期已匹配">已还</span>':r._loan?.status==='部分已还'?'<span class="out-note-partial-return-badge" title="同一借出人已有部分数量还回">部分已还</span>':'<span class="out-note-pending-return-badge" title="未找到可明确对应的还回记录，请人工核实">待核实</span>':''}</td>
       <td class="out-note-qty-cell">${Number(r.quantity||0)}</td>
       <td class="out-note-location-cell">${h(r._location||'')}</td>
       <td class="out-note-note-cell">${h(r._businessNote||'')}</td>
@@ -289,6 +311,7 @@
 #outNotes .out-note-action-cell{white-space:nowrap!important}
 #outNotes .out-note-returned-badge,#outNotes .out-note-partial-return-badge{display:inline-flex!important;vertical-align:middle;align-items:center;justify-content:center;margin-left:7px;padding:2px 7px;border-radius:999px;font-size:10px;line-height:1.5;font-weight:700;white-space:nowrap;border:1px solid #c7ebdd;background:#eaf9f2;color:#087f5b}
 #outNotes .out-note-partial-return-badge{border-color:#f8dc9e;background:#fff8e9;color:#986500}
+#outNotes .out-note-pending-return-badge{display:inline-flex!important;vertical-align:middle;align-items:center;margin-left:7px;padding:2px 7px;border:1px solid #d9dfe8;border-radius:999px;background:#f1f4f8;color:#667085;font-size:10px;font-weight:700;white-space:nowrap}
 #outNotes{padding:0 2px 20px}.out-note-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin:4px 0 14px}.out-note-head h2{margin:0 0 4px;font-size:22px;color:#102a43}.out-note-head>span{font-size:13px;color:#667085;padding-top:5px}
 #outNoteFilters{display:grid;grid-template-columns:minmax(170px,1.05fr) minmax(130px,.7fr) minmax(145px,.8fr) minmax(145px,.8fr) minmax(210px,1.2fr) auto;gap:10px;align-items:end;padding:14px;margin-bottom:12px;background:#f8fafc}
 #outNoteFilters label{font-size:12px;color:#667085;font-weight:600;display:flex;flex-direction:column;gap:6px;min-width:0}#outNoteFilters input,#outNoteFilters select{width:100%;min-height:42px}.out-note-actions{display:flex;gap:8px;align-items:end}.out-note-actions button{min-height:42px;white-space:nowrap}
