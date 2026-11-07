@@ -262,7 +262,7 @@
       <div class="recon-head">
         <div>
           <h2>月结核对</h2>
-          <div class="hint">用库存实际减少量，对照 POS 销量及 ENT、FOC、厨房使用、NO Paid 等特殊出库。</div>
+          <div class="hint">用库存实际减少量，对照 POS 销量、外卖订单及 ENT、FOC、厨房使用、NO Paid 等特殊出库。</div>
         </div>
         <span id="reconStatus"></span>
       </div>
@@ -297,7 +297,7 @@
 
       <div class="card recon-guide">
         <b>核对公式：</b>
-        <span>上月结存 + 本月入库 − 本月结存 = 库存实际减少；跨月 NO Paid 在付款月增加月结调整量，显示在本月实际减少栏下方；本月实际减少 = POS 销量 + FOC + 厨房使用 + NO Paid + 取消入库 + 其他 + 借出 − 还回。ENT 已包含在 POS 销量内，仅作分类参考。</span>
+        <span>上月结存 + 本月入库 − 本月结存 = 库存实际减少；跨月 NO Paid 在付款月增加月结调整量，显示在本月实际减少栏下方；本月实际减少 = POS 销量 + 外卖订单 + FOC + 厨房使用 + NO Paid + 取消入库 + 历史其他 + 借出 − 还回。ENT 已包含在 POS 销量内，仅作分类参考。</span>
       </div>
 
       <div class="card recon-card">
@@ -321,19 +321,20 @@
               <th class="recon-ent-head" title="员工出库时标注的 ENT 记录；已包含在 POS 销量内，不参与库存对账">ENT</th>
               <th class="recon-ent-head" title="月底确认后的真实 ENT 数量；只用于核对员工分类，不影响库存">ENT (实际)</th>
               <th class="recon-ent-head" title="ENT 实际 − ENT 系统；只用于检查漏标或错标，不影响库存">ENT 差异</th>
+              <th>外卖订单</th>
               <th>FOC</th>
               <th>厨房使用</th>
               <th>NO Paid</th>
               <th>取消入库</th>
               <th>借出</th>
               <th>还回</th>
-              <th>其他</th>
+              <th title="仅保留旧出库记录，不再提供新建‘其他’类型">历史其他</th>
               <th>对账差异</th>
               <th>状态</th>
               <th>备注</th>
               <th>人工确认</th>
             </tr></thead>
-            <tbody id="reconInventoryBody"><tr><td colspan="21">读取中...</td></tr></tbody>
+            <tbody id="reconInventoryBody"><tr><td colspan="22">读取中...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -502,7 +503,7 @@
     const status=document.getElementById('reconStatus');
     const body=document.getElementById('reconInventoryBody');
     const hadData=allLogs.length>0||posRows.length>0||entActualRows.length>0;
-    if(body&&!hadData)body.innerHTML='<tr><td colspan="21">读取中...</td></tr>';
+    if(body&&!hadData)body.innerHTML='<tr><td colspan="22">读取中...</td></tr>';
     if(status)status.textContent='读取中...';
     try{
       const [logs,pos,entActual,reviews,locks,payments]=await Promise.all([
@@ -664,7 +665,7 @@
     const resolver=window.InventoryHistoryEngine.createResolver(historyItems());
     function ensure(id){
       const key=String(id||'');
-      if(!map.has(key))map.set(key,{inbound:0,initialStock:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0});
+      if(!map.has(key))map.set(key,{inbound:0,initialStock:0,ent:0,takeaway:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0});
       return map.get(key);
     }
     allLogs.forEach(r=>{
@@ -690,6 +691,7 @@
 
       const type=detectOutType(r);
       if(type==='ENT')s.ent+=q;
+      else if(type==='TAKEAWAY')s.takeaway+=q;
       else if(type==='FOC')s.foc+=q;
       else if(type==='KITCHEN')s.kitchen+=q;
       else if(type==='NO_PAID'||type==='CREDIT')s.noPaid+=q;
@@ -801,6 +803,7 @@
       normalizedReviewNumber(values.inbound),
       normalizedReviewNumber(values.sold),
       normalizedReviewNumber(values.posValue),
+      normalizedReviewNumber(values.takeaway),
       normalizedReviewNumber(values.foc),
       normalizedReviewNumber(values.kitchen),
       normalizedReviewNumber(values.noPaid),
@@ -827,7 +830,7 @@
 
     const rows=sourceItems.map(item=>{
       const key=String(item.id);
-      const s=stats.get(key)||{inbound:0,initialStock:0,ent:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0};
+      const s=stats.get(key)||{inbound:0,initialStock:0,ent:0,takeaway:0,foc:0,kitchen:0,noPaid:0,cancelIn:0,borrow:0,returned:0,other:0};
       const openState=open.get(key);
       const closeState=close.get(key);
       const opening=openState&&openState.exists?num(openState.total):0;
@@ -858,7 +861,7 @@
 
       const paidThisMonth=samePaid.get(key)||{qty:0,notes:[]};
       const remainingNoPaid=clean(Math.max(0,s.noPaid-paidThisMonth.qty));
-      const explained=posValue===null?null:posValue+s.foc+s.kitchen+remainingNoPaid+s.cancelIn+s.other+s.borrow-s.returned;
+      const explained=posValue===null?null:posValue+s.takeaway+s.foc+s.kitchen+remainingNoPaid+s.cancelIn+s.other+s.borrow-s.returned;
       const diff=explained===null?null:clean(explained-sold);
       const uncertain=!!(openState?.totalUncertain||closeState?.totalUncertain);
       const review=rmap.get(key+'|'+String(selectedMonth))
@@ -866,7 +869,7 @@
         || null;
       const reviewNote=review?.note||'';
       const reviewable=!uncertain&&diff!==null&&Math.abs(num(diff))>0.000001;
-      const reviewSignature=reconciliationSignature({opening,closing,inbound,sold,posValue,foc:s.foc,kitchen:s.kitchen,noPaid:remainingNoPaid,cancelIn:s.cancelIn,borrow:s.borrow,returned:s.returned,other:s.other,diff,note:reviewNote});
+      const reviewSignature=reconciliationSignature({opening,closing,inbound,sold,posValue,takeaway:s.takeaway,foc:s.foc,kitchen:s.kitchen,noPaid:remainingNoPaid,cancelIn:s.cancelIn,borrow:s.borrow,returned:s.returned,other:s.other,diff,note:reviewNote});
       const storedManualOk=!!review?.manual_ok;
       const confirmedDiff=review?.confirmed_diff;
       const signatureMatches=String(review?.confirmed_signature||'')===reviewSignature;
@@ -934,7 +937,7 @@
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td>
-      </tr>`).join('')||'<tr><td colspan="21">暂无饮料资料</td></tr>';
+      </tr>`).join('')||'<tr><td colspan="22">暂无饮料资料</td></tr>';
 
       const hint=document.getElementById('reconInventoryDateHint');
       if(hint)hint.textContent='本月尚未结束，仅显示上月结存';
@@ -968,6 +971,7 @@
         <td class="recon-ent-col">${clean(r.ent)}</td>
         <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(clean(r.entActualValue))}" ${locked?'disabled':''}></td>
         <td class="recon-ent-col recon-ent-diff" data-ent-diff-for="${h(r.item.id)}">${Math.abs(r.entDiff)<0.000001?'<span class="recon-ok">0</span>':`<span class="${r.entDiff>0?'recon-bad':'recon-warn'}">${r.entDiff>0?'+':''}${r.entDiff}</span>`}</td>
+        <td>${clean(r.takeaway)}</td>
         <td>${clean(r.foc)}</td>
         <td>${clean(r.kitchen)}</td>
         <td>${clean(r.noPaid)}${r.paidThisMonth.qty?'<div class="recon-sub">顾客当月付钱了（'+clean(r.paidThisMonth.qty)+'）</div>':''}</td>
@@ -980,7 +984,7 @@
         <td><input class="recon-review-note" data-item-id="${h(r.item.id)}" value="${h(r.reviewNote)}" placeholder="填写核对原因" ${locked?'disabled':''}></td>
         <td>${r.reviewable?`<button type="button" class="recon-manual-ok ${r.manualOk?'is-ok':''}" data-item-id="${h(r.item.id)}" ${locked?'disabled':''}>${r.manualOk?'OK ✓':'选择 OK'}</button>`:'<span class="recon-muted">—</span>'}</td>
       </tr>`;
-    }).join('')||'<tr><td colspan="21">暂无饮料资料</td></tr>';
+    }).join('')||'<tr><td colspan="22">暂无饮料资料</td></tr>';
 
     body.querySelectorAll('.recon-inbound-note-btn').forEach(btn=>btn.onclick=()=>{
       const notes=inboundNotes.get(String(btn.dataset.itemId))||[];
@@ -1082,7 +1086,7 @@
     const closing=clean(rows.reduce((s,r)=>s+r.closing,0));
     const sold=clean(rows.reduce((s,r)=>s+r.sold,0));
     const pos=clean(rows.reduce((s,r)=>s+(r.posValue===null?0:r.posValue),0));
-    const special=clean(rows.reduce((s,r)=>s+r.foc+r.kitchen+r.noPaid+r.cancelIn+r.other+r.borrow-r.returned,0));
+    const special=clean(rows.reduce((s,r)=>s+r.takeaway+r.foc+r.kitchen+r.noPaid+r.cancelIn+r.other+r.borrow-r.returned,0));
     const issue=clean(rows.reduce((s,r)=>s+(r.uncertain||r.diff===null||r.manualOk?0:Math.abs(num(r.diff))),0));
     document.getElementById('reconOpeningTotal').textContent=opening;
     document.getElementById('reconClosingTotal').textContent=closing;
@@ -1099,9 +1103,9 @@
     const rows=computeRows(draftFromInputs());
     const r=rows.find(x=>String(x.item.id)===itemId);
     const tr=input.closest('tr');
-    if(r&&tr&&tr.cells.length>=19){
-      tr.cells[17].innerHTML=diffText(r.diff,r.uncertain);
-      tr.cells[18].innerHTML=statusText(r);
+    if(r&&tr&&tr.cells.length>=22){
+      tr.cells[18].innerHTML=diffText(r.diff,r.uncertain);
+      tr.cells[19].innerHTML=statusText(r);
       const warning=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001&&!r.manualOk;
       tr.classList.toggle('recon-alert-row',warning);
     }
@@ -1346,13 +1350,14 @@
         'ENT':'',
         'ENT (实际)':'',
         'ENT 差异':'',
+        '外卖订单':'',
         'FOC':'',
         '厨房使用':'',
         'NO Paid':'',
         '取消入库':'',
         '借出':'',
         '还回':'',
-        '其他':'',
+        '历史其他':'',
         '对账差异':'',
         '状态':'本月尚未结束',
         '备注':'',
@@ -1368,13 +1373,14 @@
         'ENT':clean(r.ent),
         'ENT (实际)':clean(r.entActualValue),
         'ENT 差异':clean(r.entDiff),
+        '外卖订单':clean(r.takeaway),
         'FOC':clean(r.foc),
         '厨房使用':clean(r.kitchen),
         'NO Paid':clean(r.noPaid),
         '取消入库':clean(r.cancelIn),
         '借出':clean(r.borrow),
         '还回':clean(r.returned),
-        '其他':clean(r.other),
+        '历史其他':clean(r.other),
         '对账差异':r.uncertain?'需核对旧记录':(r.diff===null?'':clean(r.diff)),
         '状态':excelStatus(r),
         '备注':r.reviewNote||'',
