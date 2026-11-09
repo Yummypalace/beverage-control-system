@@ -723,7 +723,7 @@
     const groups=new Map(),deltas=new Map();
     const resolver=window.InventoryHistoryEngine.createResolver(historyItems());
     allLogs.forEach(r=>{
-      if(!r.correction_ref||monthOf(r)!==selectedMonth)return;
+      if(!r.correction_ref||monthOf(r)!==selectedMonth||String(r.note||'').includes('｜饮料转换｜'))return;
       const ref=String(r.correction_ref);
       if(!groups.has(ref))groups.set(ref,[]);
       groups.get(ref).push(r);
