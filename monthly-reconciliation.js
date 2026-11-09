@@ -723,7 +723,7 @@
     const groups=new Map(),deltas=new Map();
     const resolver=window.InventoryHistoryEngine.createResolver(historyItems());
     allLogs.forEach(r=>{
-      if(!r.correction_ref||monthOf(r)!==selectedMonth||String(r.note||'').includes('｜饮料转换｜'))return;
+      if(!r.correction_ref||monthOf(r)!==selectedMonth)return;
       const ref=String(r.correction_ref);
       if(!groups.has(ref))groups.set(ref,[]);
       groups.get(ref).push(r);
@@ -788,16 +788,6 @@
     }
     return map;
   }
-  function conversionDeltasForMonth(){
-    const map=new Map();
-    for(const c of beverageConversions){
-      if(c.month_key!==selectedMonth)continue;
-      const from=String(c.pos_item_id),to=String(c.actual_item_id),qty=num(c.quantity);
-      map.set(from,clean((map.get(from)||0)-qty));
-      map.set(to,clean((map.get(to)||0)+qty));
-    }
-    return map;
-  }
   function posMap(){
     const map=new Map();
     posRows.forEach(r=>map.set(`${r.item_id}|${r.month_key}`,r));
@@ -853,7 +843,6 @@
     const stats=monthStats();
     const correctionDeltas=itemCorrectionDeltasForMonth();
     const pmap=posMap();
-    const conversionDeltas=conversionDeltasForMonth();
     const crossPaid=crossMonthPaidMap();
     const samePaid=sameMonthPaidMap();
     const rmap=reviewMap();
@@ -886,9 +875,6 @@
         posValue=saved?num(saved.pos_quantity):(monthHasSavedPos?0:null);
       }
 
-      const rawPosValue=posValue;
-      const conversionDelta=num(conversionDeltas.get(key));
-      if(posValue!==null)posValue=clean(posValue+conversionDelta);
       const entSaved=entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_id)===key)
         || entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_name||'')===String(item.name||''));
       const entActualValue=entSaved?num(entSaved.ent_actual):0;
@@ -923,7 +909,7 @@
         ||hasMonthData;
       if(!relevant)return null;
 
-      return {item,...s,noPaid:remainingNoPaid,paidThisMonth,inbound,opening,closing,sold,physicalSold,settlement,posValue,rawPosValue,conversionDelta,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
+      return {item,...s,noPaid:remainingNoPaid,paidThisMonth,inbound,opening,closing,sold,physicalSold,settlement,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
     }).filter(Boolean);
 
     rows.sort((a,b)=>{
@@ -993,7 +979,7 @@
     body.innerHTML=rows.map(r=>{
       const notes=inboundNotes.get(String(r.item.id))||[];
       const noteBadge=notes.length?'<button type="button" class="recon-inbound-note-btn" data-item-id="'+h(r.item.id)+'" title="点击查看入库备注">备注：'+h(notes.length===1?notes[0].note:(notes[0].note+' 等'+notes.length+'笔'))+'</button>':'';
-      const input=r.rawPosValue===null?'':clean(r.rawPosValue);
+      const input=r.posValue===null?'':clean(r.posValue);
       const alert=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001&&!r.manualOk;
       return `<tr class="${alert?'recon-alert-row':''}">
         <td class="recon-name-cell" title="${h(r.item.name)}"><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
@@ -1002,7 +988,7 @@
         <td>${clean(r.closing)}</td>
         <td><span class="recon-inbound-number">${clean(r.inbound)}</span>${noteBadge}</td>
         <td>${r.settlement.qty?`<b>${clean(r.physicalSold)} + ${clean(r.settlement.qty)} = ${clean(r.sold)}</b><button type="button" class="recon-cross-paid-note-btn recon-inbound-note-btn" data-item-id="${h(r.item.id)}" title="查看跨月付款备注">备注</button>`:`<b>${clean(r.sold)}</b>`}</td>
-        <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}>${r.conversionDelta?'<div class="recon-sub recon-pos-conversion" data-conversion-for="'+h(r.item.id)+'" title="饮料转换后的月结 POS 对账数量">转换 '+(r.conversionDelta>0?'+':'')+clean(r.conversionDelta)+' → '+clean(r.posValue)+'</div>':''}</td>
+        <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}></td>
         <td class="recon-ent-col">${clean(r.ent)}</td>
         <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(clean(r.entActualValue))}" ${locked?'disabled':''}></td>
         <td class="recon-ent-col recon-ent-diff" data-ent-diff-for="${h(r.item.id)}">${Math.abs(r.entDiff)<0.000001?'<span class="recon-ok">0</span>':`<span class="${r.entDiff>0?'recon-bad':'recon-warn'}">${r.entDiff>0?'+':''}${r.entDiff}</span>`}</td>
@@ -1154,8 +1140,6 @@
     const r=rows.find(x=>String(x.item.id)===itemId);
     const tr=input.closest('tr');
     if(r&&tr&&tr.cells.length>=22){
-      const conversionHint=tr.querySelector('.recon-pos-conversion');
-      if(conversionHint)conversionHint.textContent='转换 '+(r.conversionDelta>0?'+':'')+clean(r.conversionDelta)+' → '+clean(r.posValue);
       tr.cells[18].innerHTML=diffText(r.diff,r.uncertain);
       tr.cells[19].innerHTML=statusText(r);
       const noteCell=tr.cells[20];
