@@ -1,4 +1,4 @@
-// 饮料转换：修正先按 POS 误出库的实物库存，并调整月结 POS 归类。
+// 饮料转换：只修正先按 POS 误出库的实物库存；月结继续以原 POS 开单品项计算。
 (function(){
   'use strict';
   const $=id=>document.getElementById(id);
@@ -53,7 +53,7 @@
   function preview(){
     const from=selected('beverageConversionFrom'),to=selected('beverageConversionTo'),qty=Number($('beverageConversionQty').value);
     $('beverageConversionPreview').textContent=from&&to&&qty>0
-      ?'实际库存：'+from.name+' +'+qty+'，'+to.name+' −'+qty+'。月结 POS 归类同步转换，原出库记录保留。'
+      ?'实际库存：'+from.name+' +'+qty+'，'+to.name+' −'+qty+'。月结仍按原 POS 开单品项计算，出库记录保留。'
       :'请选择 POS 品项、实际饮用品项和数量。';
   }
   async function loadHistory(){
@@ -75,7 +75,7 @@
     if(!from||!to||from===to)return alert('请选择不同的两种饮料');
     if(!Number.isFinite(qty)||qty<=0)return alert('请输入正确数量');
     if(!date)return alert('请选择发生日期');
-    if(!confirm('确认转换？\nPOS 开成的饮料库存 +'+qty+'，实际喝的饮料库存 −'+qty+'。\n原出库记录保留，月结 POS 归类同步调整。'))return;
+    if(!confirm('确认转换？\nPOS 开成的饮料库存 +'+qty+'，实际喝的饮料库存 −'+qty+'。\n原出库记录保留，月结仍按照 POS 开单品项计算。'))return;
     saving=true;$('beverageConversionSave').disabled=true;
     try{
       const {error}=await sb.rpc('add_beverage_pos_conversion',{
@@ -84,7 +84,7 @@
         p_actual_location:$('beverageConversionActualLocation').value
       });
       if(error)throw error;
-      alert('转换已保存。已加回 POS 误扣饮料，扣减实际饮用饮料；月结 POS 归类也已同步更正。');
+      alert('转换已保存。已加回 POS 误扣饮料，扣减实际饮用饮料；月结仍按照原 POS 开单品项计算。');
       if(typeof loadAll==='function')await loadAll();
       $('beverageConversionDialog').close();
       if(typeof window.refreshMonthlyReconciliation==='function')window.refreshMonthlyReconciliation();
