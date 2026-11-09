@@ -788,6 +788,29 @@
     }
     return map;
   }
+  // Beverage conversion affects physical stock, not the originally issued POS bill.
+  // Show an audit note under that original POS item without altering its sales value.
+  function beverageConversionNotesForMonth(){
+    const map=new Map(),names=new Map(historyItems().map(x=>[String(x.id),String(x.name)]));
+    for(const c of beverageConversions){
+      if(c.month_key!==selectedMonth)continue;
+      const key=String(c.pos_item_id);
+      const actual=names.get(String(c.actual_item_id))||'未知饮料';
+      const qty=clean(c.quantity);
+      const msg='转换备注：实际喝 '+actual+' ×'+qty
+        +(c.note?'（'+String(c.note)+'）':'');
+      if(!map.has(key))map.set(key,[]);
+      map.get(key).push(msg);
+    }
+    return map;
+  }
+  function beverageNoteHtml(itemId,notes){
+    const entries=notes.get(String(itemId))||[];
+    if(!entries.length)return '';
+    return '<div class="recon-sub recon-beverage-conversion-note" title="'+h(entries.join('；'))+'">'+
+      h(entries.join('；'))+'</div>';
+  }
+
   function posMap(){
     const map=new Map();
     posRows.forEach(r=>map.set(`${r.item_id}|${r.month_key}`,r));
@@ -941,6 +964,7 @@
     const body=document.getElementById('reconInventoryBody');if(!body)return;
     const draft=forcedDraft||(preserveInputs?draftFromInputs():null);
     const allRows=computeRows(draft);
+    const beverageNotes=beverageConversionNotesForMonth();
     let rows=allRows;
     const keyword=(document.getElementById('reconSearch')?.value||'').trim().toLowerCase();
     if(keyword){
@@ -954,7 +978,8 @@
         <td class="recon-name-cell" title="${h(r.item.name)}"><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
         <td style="text-align:center"><span class="pill category-pill">${h(r.item.category||'-')}</span></td>
         <td>${clean(r.opening)}</td>
-        <td>-</td><td>-</td><td>-</td><td>-</td>
+        <td>-</td><td>-</td><td>-</td>
+        <td>-${beverageNoteHtml(r.item.id,beverageNotes)}</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>
         <td>-</td><td>-</td>
@@ -988,7 +1013,7 @@
         <td>${clean(r.closing)}</td>
         <td><span class="recon-inbound-number">${clean(r.inbound)}</span>${noteBadge}</td>
         <td>${r.settlement.qty?`<b>${clean(r.physicalSold)} + ${clean(r.settlement.qty)} = ${clean(r.sold)}</b><button type="button" class="recon-cross-paid-note-btn recon-inbound-note-btn" data-item-id="${h(r.item.id)}" title="查看跨月付款备注">备注</button>`:`<b>${clean(r.sold)}</b>`}</td>
-        <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}></td>
+        <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}>${beverageNoteHtml(r.item.id,beverageNotes)}</td>
         <td class="recon-ent-col">${clean(r.ent)}</td>
         <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(clean(r.entActualValue))}" ${locked?'disabled':''}></td>
         <td class="recon-ent-col recon-ent-diff" data-ent-diff-for="${h(r.item.id)}">${Math.abs(r.entDiff)<0.000001?'<span class="recon-ok">0</span>':`<span class="${r.entDiff>0?'recon-bad':'recon-warn'}">${r.entDiff>0?'+':''}${r.entDiff}</span>`}</td>
@@ -1726,7 +1751,8 @@ body.recon-resizing{cursor:col-resize!important;user-select:none!important}body.
 .recon-table thead th:first-child{left:0;z-index:8;box-shadow:2px 0 0 #e5e7eb}
 .recon-table tbody td:first-child{position:sticky;left:0;z-index:2;background:#fff;box-shadow:2px 0 0 #e5e7eb}
 .recon-table tbody tr.recon-alert-row td:first-child{background:#fff7f5}
-.recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-review-note{display:none}.recon-review-open{min-width:58px!important;max-width:100%;padding:6px 9px!important;font-size:12px!important;white-space:nowrap}.recon-manual-ok{min-width:72px;padding:6px 9px;background:#e9edf2;color:#475467;font-size:12px}.recon-manual-ok.is-ok{background:#087f5b;color:#fff}
+.recon-table td{vertical-align:middle;white-space:nowrap}.recon-name-cell{overflow:hidden}.recon-name-cell>b{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.recon-table thead th:nth-child(n+3),.recon-table tbody td:nth-child(n+3){text-align:center}.recon-table thead th:nth-child(1),.recon-table thead th:nth-child(2),.recon-table tbody td:nth-child(1),.recon-table tbody td:nth-child(2){text-align:left}.recon-beverage-conversion-note{font-size:11px;line-height:1.4;color:#667085;white-space:normal;overflow-wrap:anywhere;max-width:100%;margin-top:5px;text-align:left}
+.recon-pos-input,.recon-ent-actual-input{text-align:center}.recon-pos-input{width:100%;min-width:0;max-width:100%;min-height:36px;padding:7px 8px;box-sizing:border-box}.recon-review-note{display:none}.recon-review-open{min-width:58px!important;max-width:100%;padding:6px 9px!important;font-size:12px!important;white-space:nowrap}.recon-manual-ok{min-width:72px;padding:6px 9px;background:#e9edf2;color:#475467;font-size:12px}.recon-manual-ok.is-ok{background:#087f5b;color:#fff}
 .recon-table tbody td.recon-note-cell{padding-left:10px!important;padding-right:12px!important}
 .recon-table tbody td.recon-confirm-cell{padding-left:4px!important;padding-right:12px!important}
 .recon-table tbody td.recon-note-cell{text-align:right!important;padding-right:4px!important}
