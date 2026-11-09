@@ -793,7 +793,7 @@
   function beverageConversionNotesForMonth(){
     const map=new Map(),names=new Map(historyItems().map(x=>[String(x.id),String(x.name)]));
     for(const c of beverageConversions){
-      if(c.month_key!==selectedMonth)continue;
+      if(c.month_key!==selectedMonth||c.is_reversed)continue;
       const key=String(c.pos_item_id);
       const actual=names.get(String(c.actual_item_id))||'未知饮料';
       const qty=clean(c.quantity);
