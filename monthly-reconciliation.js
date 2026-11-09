@@ -10,6 +10,7 @@
   let reviewRows=[];
   let lockRows=[];
   let noPaidPayments=[];
+  let beverageConversions=[];
   let loading=false;
   let selectedMonth='';
   let reconSortKey='name';
@@ -478,13 +479,14 @@
     if(status)status.textContent='重新计算中...';
     const blankDraft={};
     try{
-      const [logs,pos,entActual,reviews,locks,payments]=await Promise.all([
+      const [logs,pos,entActual,reviews,locks,payments,conversions]=await Promise.all([
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true})),
-        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true})).catch(e=>{console.warn('NO Paid 付款读取失败',e);return noPaidPayments;})
+        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true})).catch(e=>{console.warn('NO Paid 付款读取失败',e);return noPaidPayments;}),
+        fetchAll('beverage_pos_conversions',q=>q.order('id',{ascending:true}))
       ]);
       allLogs=logs;
       posRows=pos;
@@ -492,6 +494,7 @@
       reviewRows=reviews;
       lockRows=locks;
       noPaidPayments=payments;
+      beverageConversions=conversions;
       populateMonths();
       computeRows().forEach(r=>blankDraft[r.item.id]='');
       render(false,blankDraft);
@@ -518,15 +521,16 @@
     if(body&&!hadData)body.innerHTML='<tr><td colspan="22">读取中...</td></tr>';
     if(status)status.textContent='读取中...';
     try{
-      const [logs,pos,entActual,reviews,locks,payments]=await Promise.all([
+      const [logs,pos,entActual,reviews,locks,payments,conversions]=await Promise.all([
         fetchAll('inventory_logs',q=>q.order('operation_date',{ascending:true}).order('created_at',{ascending:true})),
         fetchAll('monthly_pos_sales',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_ent_actual',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_reconciliation_review',q=>q.order('month_key',{ascending:true}).order('item_name',{ascending:true})),
         fetchAll('monthly_period_locks',q=>q.order('month_key',{ascending:true})),
-        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true})).catch(e=>{console.warn('NO Paid 付款记录暂时无法读取',e);return [];})
+        fetchAll('no_paid_payment_records',q=>q.order('payment_date',{ascending:true})).catch(e=>{console.warn('NO Paid 付款记录暂时无法读取',e);return [];}),
+        fetchAll('beverage_pos_conversions',q=>q.order('id',{ascending:true}))
       ]);
-      allLogs=logs;posRows=pos;entActualRows=entActual;reviewRows=reviews;lockRows=locks;noPaidPayments=payments;populateMonths();render(false,draft);
+      allLogs=logs;posRows=pos;entActualRows=entActual;reviewRows=reviews;lockRows=locks;noPaidPayments=payments;beverageConversions=conversions;populateMonths();render(false,draft);
       if(status)status.textContent='已更新';
     }catch(e){
       console.warn('月结资料读取失败，保留现有资料',e);
@@ -784,6 +788,16 @@
     }
     return map;
   }
+  function conversionDeltasForMonth(){
+    const map=new Map();
+    for(const c of beverageConversions){
+      if(c.month_key!==selectedMonth)continue;
+      const from=String(c.pos_item_id),to=String(c.actual_item_id),qty=num(c.quantity);
+      map.set(from,clean((map.get(from)||0)-qty));
+      map.set(to,clean((map.get(to)||0)+qty));
+    }
+    return map;
+  }
   function posMap(){
     const map=new Map();
     posRows.forEach(r=>map.set(`${r.item_id}|${r.month_key}`,r));
@@ -839,6 +853,7 @@
     const stats=monthStats();
     const correctionDeltas=itemCorrectionDeltasForMonth();
     const pmap=posMap();
+    const conversionDeltas=conversionDeltasForMonth();
     const crossPaid=crossMonthPaidMap();
     const samePaid=sameMonthPaidMap();
     const rmap=reviewMap();
@@ -871,6 +886,9 @@
         posValue=saved?num(saved.pos_quantity):(monthHasSavedPos?0:null);
       }
 
+      const rawPosValue=posValue;
+      const conversionDelta=num(conversionDeltas.get(key));
+      if(posValue!==null||conversionDelta!==0)posValue=clean((posValue||0)+conversionDelta);
       const entSaved=entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_id)===key)
         || entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_name||'')===String(item.name||''));
       const entActualValue=entSaved?num(entSaved.ent_actual):0;
@@ -905,7 +923,7 @@
         ||hasMonthData;
       if(!relevant)return null;
 
-      return {item,...s,noPaid:remainingNoPaid,paidThisMonth,inbound,opening,closing,sold,physicalSold,settlement,posValue,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
+      return {item,...s,noPaid:remainingNoPaid,paidThisMonth,inbound,opening,closing,sold,physicalSold,settlement,posValue,rawPosValue,conversionDelta,entActualValue,entDiff,explained,diff,uncertain,reviewNote,reviewable,reviewSignature,storedManualOk,manualOk,manualOkStale};
     }).filter(Boolean);
 
     rows.sort((a,b)=>{
@@ -975,7 +993,7 @@
     body.innerHTML=rows.map(r=>{
       const notes=inboundNotes.get(String(r.item.id))||[];
       const noteBadge=notes.length?'<button type="button" class="recon-inbound-note-btn" data-item-id="'+h(r.item.id)+'" title="点击查看入库备注">备注：'+h(notes.length===1?notes[0].note:(notes[0].note+' 等'+notes.length+'笔'))+'</button>':'';
-      const input=r.posValue===null?'':clean(r.posValue);
+      const input=r.rawPosValue===null?'':clean(r.rawPosValue);
       const alert=!r.uncertain&&r.diff!==null&&Math.abs(r.diff)>0.000001&&!r.manualOk;
       return `<tr class="${alert?'recon-alert-row':''}">
         <td class="recon-name-cell" title="${h(r.item.name)}"><b>${h(r.item.name)}</b><div class="recon-sub">${h(r.item.unit||'')}</div></td>
