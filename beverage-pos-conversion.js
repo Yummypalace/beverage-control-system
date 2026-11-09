@@ -165,7 +165,7 @@
         rows.push(...(data||[]));
         if(!data||data.length<1000)break;
       }
-      allConversions=rows;
+      allConversions=rows.filter(r=>!r.is_reversed);
       const {data:inventoryNames,error:nameError}=await sb.from('inventory_items').select('id,name');
       if(!nameError&&inventoryNames)historyItemNames=new Map(inventoryNames.map(x=>[String(x.id),String(x.name)]));
       renderHistory();
@@ -202,16 +202,14 @@
         '<td style="white-space:normal;min-width:180px">'+safe(r.note||'—')+'</td>'+
         '<td>'+safe(r.created_by||'—')+'</td>'+
         '<td>'+safe(timestamp)+'</td>'+
-        '<td>'+(r.is_reversed
-          ?'<span style="color:#6b7280;font-weight:700">已撤销</span><div class="hint">'+safe(r.reversed_by||'')+' '+safe(r.reversed_at?new Date(r.reversed_at).toLocaleString('zh-SG',{timeZone:'Asia/Singapore',hour12:false}):'')+'</div>'
-          :'<button type="button" class="secondary" data-reverse-conversion="'+Number(r.id)+'" style="white-space:nowrap">撤销</button>')+'</td></tr>';
+        '<td><button type="button" class="secondary" data-reverse-conversion="'+Number(r.id)+'" style="white-space:nowrap">撤销</button></td></tr>';
     }).join('')||'<tr><td colspan="10" style="text-align:center;padding:20px">暂无符合条件的饮料转换记录</td></tr>';
   }
   async function reverseConversion(id){
     if(saving||!Number.isSafeInteger(id)||id<=0)return;
     const record=allConversions.find(x=>Number(x.id)===id);
     if(!record||record.is_reversed)return;
-    if(!confirm('确定撤销这笔饮料转换？\\n将原 POS 饮料库存扣回、实际饮用饮料库存加回。\\n月结转换备注会取消，但原转换与撤销记录都保留。'))return;
+    if(!confirm('确定撤销这笔饮料转换？\\n将原 POS 饮料库存扣回、实际饮用饮料库存加回。\\n月结转换备注会取消，这笔转换会从页面列表中消失。'))return;
     saving=true;
     try{
       const {error}=await sb.rpc('reverse_beverage_pos_conversion',{p_id:id});
@@ -219,7 +217,7 @@
       await fetchHistory();
       if(typeof loadAll==='function')await loadAll();
       if(typeof window.refreshMonthlyReconciliation==='function')window.refreshMonthlyReconciliation();
-      alert('饮料转换已撤销；库存恢复，记录标注为「已撤销」，月结转换备注也会同步取消。');
+      alert('饮料转换已撤销；库存已恢复，这笔记录已从列表消失，月结转换备注同步取消。');
     }catch(e){alert('撤销失败：'+String(e.message||e));}
     finally{saving=false;}
   }
