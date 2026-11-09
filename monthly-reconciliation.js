@@ -888,7 +888,7 @@
 
       const rawPosValue=posValue;
       const conversionDelta=num(conversionDeltas.get(key));
-      if(posValue!==null||conversionDelta!==0)posValue=clean((posValue||0)+conversionDelta);
+      if(posValue!==null)posValue=clean(posValue+conversionDelta);
       const entSaved=entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_id)===key)
         || entActualRows.find(r=>r.month_key===selectedMonth&&String(r.item_name||'')===String(item.name||''));
       const entActualValue=entSaved?num(entSaved.ent_actual):0;
