@@ -17,6 +17,7 @@
 .side-nav a[href="#dashboard"]{order:10}
 .side-nav a[href="#inventory"]{order:20}
 .side-nav a[href="#commission"]{order:30}
+.side-nav a[href="#beverageConversionRecords"]{order:35}
 .side-nav a[href="#outNotes"]{order:40}
 .side-nav a[href="#stocktakeAdjust"]{order:50}
 .side-nav a[href="#monthlyReconciliation"]{order:60}
