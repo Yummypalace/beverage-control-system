@@ -8,6 +8,7 @@
   let allConversions=[];
   let fetching=false;
   let pageInstalled=false;
+  let historyItemNames=new Map();
   function init(){
     if(typeof sb==='undefined'||typeof items==='undefined'||!document.querySelector('#inventory .toolbar')){setTimeout(init,180);return;}
     if($('beverageConversionBtn'))return;
@@ -146,7 +147,9 @@
   }
   function historyNames(){
     const list=typeof allItems!=='undefined'&&Array.isArray(allItems)?allItems:items;
-    return new Map(list.map(x=>[String(x.id),String(x.name)]));
+    const names=new Map(list.map(x=>[String(x.id),String(x.name)]));
+    historyItemNames.forEach((name,id)=>names.set(id,name));
+    return names;
   }
   async function fetchHistory(){
     if(fetching||!$('beverageHistoryBody'))return;
@@ -163,6 +166,8 @@
         if(!data||data.length<1000)break;
       }
       allConversions=rows;
+      const {data:inventoryNames,error:nameError}=await sb.from('inventory_items').select('id,name');
+      if(!nameError&&inventoryNames)historyItemNames=new Map(inventoryNames.map(x=>[String(x.id),String(x.name)]));
       renderHistory();
     }catch(e){
       $('beverageHistoryCount').textContent='读取失败';
