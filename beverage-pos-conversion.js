@@ -98,9 +98,9 @@
             <thead><tr>
               <th>转换日期</th><th>POS 开成（加回库存）</th>
               <th>实际喝了（扣库存）</th><th>数量</th>
-              <th>库存调整</th><th>备注</th><th>操作人</th><th>记录时间</th>
+              <th>库存调整</th><th>加回位置 / 扣减位置</th><th>备注</th><th>操作人</th><th>记录时间</th>
             </tr></thead>
-            <tbody id="beverageHistoryBody"><tr><td colspan="8">读取中...</td></tr></tbody>
+            <tbody id="beverageHistoryBody"><tr><td colspan="9">读取中...</td></tr></tbody>
           </table>
         </div>
       </div>`;
@@ -152,7 +152,7 @@
       const rows=[];
       for(let offset=0;;offset+=1000){
         const {data,error}=await sb.from('beverage_pos_conversions')
-          .select('id,operation_date,pos_item_id,actual_item_id,quantity,note,created_by,created_at')
+          .select('id,operation_date,pos_item_id,actual_item_id,quantity,wrong_location,actual_location,note,created_by,created_at')
           .order('id',{ascending:false}).range(offset,offset+999);
         if(error)throw error;
         rows.push(...(data||[]));
@@ -162,7 +162,7 @@
       renderHistory();
     }catch(e){
       $('beverageHistoryCount').textContent='读取失败';
-      $('beverageHistoryBody').innerHTML='<tr><td colspan="8">加载失败：'+safe(e.message||e)+'</td></tr>';
+      $('beverageHistoryBody').innerHTML='<tr><td colspan="9">加载失败：'+safe(e.message||e)+'</td></tr>';
     }finally{fetching=false;}
   }
   function renderHistory(){
@@ -188,11 +188,12 @@
         '<td>'+safe(original)+'</td>'+
         '<td>'+safe(actual)+'</td>'+
         '<td>'+safe(qty)+'</td>'+
-        '<td style="white-space:nowrap">'+safe(original)+' +'+safe(qty)+'，'+safe(actual)+' −'+safe(qty)+'</td>'+
+        '<td style="white-space:nowrap">'+safe(original)+' +'+safe(qty)+'，'+safe(actual)+' −'+safe(qty)+'</td>'+ 
+        '<td>'+safe(r.wrong_location==='fridge'?'冰箱':r.wrong_location==='warehouse'?'仓库':'—')+' / '+safe(r.actual_location==='fridge'?'冰箱':r.actual_location==='warehouse'?'仓库':'—')+'</td>'+ 
         '<td style="white-space:normal;min-width:180px">'+safe(r.note||'—')+'</td>'+
         '<td>'+safe(r.created_by||'—')+'</td>'+
         '<td>'+safe(timestamp)+'</td></tr>';
-    }).join('')||'<tr><td colspan="8" style="text-align:center;padding:20px">暂无符合条件的饮料转换记录</td></tr>';
+    }).join('')||'<tr><td colspan="9" style="text-align:center;padding:20px">暂无符合条件的饮料转换记录</td></tr>';
   }
   async function save(){
     if(saving)return;
