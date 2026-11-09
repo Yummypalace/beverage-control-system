@@ -218,7 +218,12 @@
       if($('beverageConversionRecords')?.style.display!=='none')await fetchHistory();
       if(typeof window.refreshMonthlyReconciliation==='function')window.refreshMonthlyReconciliation();
       if(typeof window.loadMonthlyReconciliation==='function')window.loadMonthlyReconciliation();
-    }catch(e){alert('饮料转换保存失败：'+(e.message||e));}
+    }catch(e){
+      const message=String(e.message||e);
+      if(/could not find the function|schema cache/i.test(message)){
+        alert('网页使用的饮料转换版本与数据库不一致。请按 Ctrl + F5 强制刷新，重新打开「饮料转换」，确认有「加回位置」和「扣减位置」两个选项后再保存。\n\n原库存不会因这次失败而改变。');
+      }else alert('饮料转换保存失败：'+message);
+    }
     finally{saving=false;$('beverageConversionSave').disabled=false;}
   }
   init();
