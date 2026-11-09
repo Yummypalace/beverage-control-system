@@ -1002,7 +1002,7 @@
         <td>${clean(r.closing)}</td>
         <td><span class="recon-inbound-number">${clean(r.inbound)}</span>${noteBadge}</td>
         <td>${r.settlement.qty?`<b>${clean(r.physicalSold)} + ${clean(r.settlement.qty)} = ${clean(r.sold)}</b><button type="button" class="recon-cross-paid-note-btn recon-inbound-note-btn" data-item-id="${h(r.item.id)}" title="查看跨月付款备注">备注</button>`:`<b>${clean(r.sold)}</b>`}</td>
-        <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}></td>
+        <td><input class="recon-pos-input" data-item-id="${h(r.item.id)}" type="number" min="0" step="0.01" value="${h(input)}" placeholder="未录入" ${locked?'disabled':''}>${r.conversionDelta?'<div class="recon-sub recon-pos-conversion" data-conversion-for="'+h(r.item.id)+'" title="饮料转换后的月结 POS 对账数量">转换 '+(r.conversionDelta>0?'+':'')+clean(r.conversionDelta)+' → '+clean(r.posValue)+'</div>':''}</td>
         <td class="recon-ent-col">${clean(r.ent)}</td>
         <td class="recon-ent-col"><input class="recon-ent-actual-input" data-item-id="${h(r.item.id)}" data-system-ent="${h(clean(r.ent))}" type="number" min="0" step="0.01" value="${h(clean(r.entActualValue))}" ${locked?'disabled':''}></td>
         <td class="recon-ent-col recon-ent-diff" data-ent-diff-for="${h(r.item.id)}">${Math.abs(r.entDiff)<0.000001?'<span class="recon-ok">0</span>':`<span class="${r.entDiff>0?'recon-bad':'recon-warn'}">${r.entDiff>0?'+':''}${r.entDiff}</span>`}</td>
@@ -1154,6 +1154,8 @@
     const r=rows.find(x=>String(x.item.id)===itemId);
     const tr=input.closest('tr');
     if(r&&tr&&tr.cells.length>=22){
+      const conversionHint=tr.querySelector('.recon-pos-conversion');
+      if(conversionHint)conversionHint.textContent='转换 '+(r.conversionDelta>0?'+':'')+clean(r.conversionDelta)+' → '+clean(r.posValue);
       tr.cells[18].innerHTML=diffText(r.diff,r.uncertain);
       tr.cells[19].innerHTML=statusText(r);
       const noteCell=tr.cells[20];
