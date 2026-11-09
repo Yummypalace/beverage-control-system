@@ -19,12 +19,12 @@
     document.querySelector('#inventory .toolbar').appendChild(b);
     const d=document.createElement('dialog');d.id='beverageConversionDialog';
     d.innerHTML=`<div class="modal">
-      <h3>饮料转换 · POS 品项更正</h3>
-      <p class="hint" style="line-height:1.7">已按 POS 误开品项录入出库后，发现顾客实际喝的是另一款饮料，可在这里转换。<b>POS 开成的饮料加回库存，实际喝的饮料扣库存；原出库记录保留。</b></p>
+      <h3>饮料转换 · 库存品项更正</h3>
+      <p class="hint" style="line-height:1.7">已按 POS 误开品项录入出库后，发现顾客实际喝的是另一款饮料，可在这里转换。<b>POS 开成的饮料加回库存，实际喝的饮料扣库存；原出库记录和 POS 销量都不变。</b> 月结按原 POS 品项核对，并在该饮料下方注明实际饮用转换。</p>
       <div class="grid2">
-        <label class="full">发生日期<input type="date" id="beverageConversionDate"></label>
+        <label class="full">转换对应的出库日期<input type="date" id="beverageConversionDate"></label>
         <label>POS 开成（库存加回）<select id="beverageConversionFrom"></select></label>
-        <label>加回位置<select id="beverageConversionWrongLocation"><option value="fridge">冰箱</option><option value="warehouse">仓库</option></select></label>
+        <label title="选择原来错误扣库存的位置；该位置需有足够的原出库数量">加回位置<select id="beverageConversionWrongLocation"><option value="fridge">冰箱</option><option value="warehouse">仓库</option></select></label>
         <label>实际喝了（库存扣减）<select id="beverageConversionTo"></select></label>
         <label>扣减位置<select id="beverageConversionActualLocation"><option value="fridge">冰箱</option><option value="warehouse">仓库</option></select></label>
         <label class="full">数量<input id="beverageConversionQty" type="number" min="0.01" step="0.01" value="1"></label>
@@ -56,7 +56,7 @@
   function preview(){
     const from=selected('beverageConversionFrom'),to=selected('beverageConversionTo'),qty=Number($('beverageConversionQty').value);
     $('beverageConversionPreview').textContent=from&&to&&qty>0
-      ?'实际库存：'+from.name+' +'+qty+'，'+to.name+' −'+qty+'。月结仍按原 POS 开单品项计算，出库记录保留。'
+      ?'实际库存：'+from.name+' +'+qty+'，'+to.name+' −'+qty+'。POS 销量仍记在「'+from.name+'」下，月结自动抵消库存转换差额并显示备注。'
       :'请选择 POS 品项、实际饮用品项和数量。';
   }
 
@@ -248,6 +248,8 @@
       const message=String(e.message||e);
       if(/could not find the function|schema cache/i.test(message)){
         alert('网页使用的饮料转换版本与数据库不一致。请按 Ctrl + F5 强制刷新，重新打开「饮料转换」，确认有「加回位置」和「扣减位置」两个选项后再保存。\n\n原库存不会因这次失败而改变。');
+      }else if(/出库数量不足/i.test(message)){
+        alert('保存失败：请检查对应月份已录入的原 POS 饮料出库、转换对应日期和加回位置（冰箱／仓库）。\n\n'+message);
       }else alert('饮料转换保存失败：'+message);
     }
     finally{saving=false;$('beverageConversionSave').disabled=false;}
