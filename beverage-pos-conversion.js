@@ -98,9 +98,9 @@
             <thead><tr>
               <th>转换日期</th><th>POS 开成（加回库存）</th>
               <th>实际喝了（扣库存）</th><th>数量</th>
-              <th>库存调整</th><th>加回位置 / 扣减位置</th><th>备注</th><th>操作人</th><th>记录时间</th>
+              <th>库存调整</th><th>加回位置 / 扣减位置</th><th>备注</th><th>操作人</th><th>记录时间</th><th>状态 / 操作</th>
             </tr></thead>
-            <tbody id="beverageHistoryBody"><tr><td colspan="9">读取中...</td></tr></tbody>
+            <tbody id="beverageHistoryBody"><tr><td colspan="10">读取中...</td></tr></tbody>
           </table>
         </div>
       </div>`;
@@ -139,6 +139,10 @@
       renderHistory();
     };
     $('beverageHistoryKeyword').addEventListener('keydown',e=>{if(e.key==='Enter')renderHistory();});
+    $('beverageHistoryBody').addEventListener('click',e=>{
+      const btn=e.target.closest('button[data-reverse-conversion]');
+      if(btn)reverseConversion(Number(btn.dataset.reverseConversion));
+    });
   }
   function historyNames(){
     const list=typeof allItems!=='undefined'&&Array.isArray(allItems)?allItems:items;
@@ -152,7 +156,7 @@
       const rows=[];
       for(let offset=0;;offset+=1000){
         const {data,error}=await sb.from('beverage_pos_conversions')
-          .select('id,operation_date,pos_item_id,actual_item_id,quantity,wrong_location,actual_location,note,created_by,created_at')
+          .select('id,operation_date,pos_item_id,actual_item_id,quantity,wrong_location,actual_location,note,created_by,created_at,is_reversed,reversed_at,reversed_by')
           .order('id',{ascending:false}).range(offset,offset+999);
         if(error)throw error;
         rows.push(...(data||[]));
@@ -162,7 +166,7 @@
       renderHistory();
     }catch(e){
       $('beverageHistoryCount').textContent='读取失败';
-      $('beverageHistoryBody').innerHTML='<tr><td colspan="9">加载失败：'+safe(e.message||e)+'</td></tr>';
+      $('beverageHistoryBody').innerHTML='<tr><td colspan="10">加载失败：'+safe(e.message||e)+'</td></tr>';
     }finally{fetching=false;}
   }
   function renderHistory(){
@@ -192,8 +196,27 @@
         '<td>'+safe(r.wrong_location==='fridge'?'冰箱':r.wrong_location==='warehouse'?'仓库':'—')+' / '+safe(r.actual_location==='fridge'?'冰箱':r.actual_location==='warehouse'?'仓库':'—')+'</td>'+ 
         '<td style="white-space:normal;min-width:180px">'+safe(r.note||'—')+'</td>'+
         '<td>'+safe(r.created_by||'—')+'</td>'+
-        '<td>'+safe(timestamp)+'</td></tr>';
-    }).join('')||'<tr><td colspan="9" style="text-align:center;padding:20px">暂无符合条件的饮料转换记录</td></tr>';
+        '<td>'+safe(timestamp)+'</td>'+
+        '<td>'+(r.is_reversed
+          ?'<span style="color:#6b7280;font-weight:700">已撤销</span><div class="hint">'+safe(r.reversed_by||'')+' '+safe(r.reversed_at?new Date(r.reversed_at).toLocaleString('zh-SG',{timeZone:'Asia/Singapore',hour12:false}):'')+'</div>'
+          :'<button type="button" class="secondary" data-reverse-conversion="'+Number(r.id)+'" style="white-space:nowrap">撤销</button>')+'</td></tr>';
+    }).join('')||'<tr><td colspan="10" style="text-align:center;padding:20px">暂无符合条件的饮料转换记录</td></tr>';
+  }
+  async function reverseConversion(id){
+    if(saving||!Number.isSafeInteger(id)||id<=0)return;
+    const record=allConversions.find(x=>Number(x.id)===id);
+    if(!record||record.is_reversed)return;
+    if(!confirm('确定撤销这笔饮料转换？\\n将原 POS 饮料库存扣回、实际饮用饮料库存加回。\\n月结转换备注会取消，但原转换与撤销记录都保留。'))return;
+    saving=true;
+    try{
+      const {error}=await sb.rpc('reverse_beverage_pos_conversion',{p_id:id});
+      if(error)throw error;
+      await fetchHistory();
+      if(typeof loadAll==='function')await loadAll();
+      if(typeof window.refreshMonthlyReconciliation==='function')window.refreshMonthlyReconciliation();
+      alert('饮料转换已撤销；库存恢复，记录标注为「已撤销」，月结转换备注也会同步取消。');
+    }catch(e){alert('撤销失败：'+String(e.message||e));}
+    finally{saving=false;}
   }
   async function save(){
     if(saving)return;
