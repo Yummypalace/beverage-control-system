@@ -5,9 +5,13 @@
   const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});
   const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let saving=false;
+  let allConversions=[];
+  let fetching=false;
+  let pageInstalled=false;
   function init(){
     if(typeof sb==='undefined'||typeof items==='undefined'||!document.querySelector('#inventory .toolbar')){setTimeout(init,180);return;}
     if($('beverageConversionBtn'))return;
+    installHistoryPage();
     const b=document.createElement('button');
     b.id='beverageConversionBtn';b.type='button';b.className='secondary';b.textContent='饮料转换';
     b.onclick=open;
@@ -27,8 +31,6 @@
       </div>
       <div id="beverageConversionPreview" class="hint" style="margin-top:12px;line-height:1.7"></div>
       <div class="modalfooter"><button type="button" class="secondary" id="beverageConversionClose">取消</button><button type="button" class="green" id="beverageConversionSave">确认转换</button></div>
-      <h4 style="margin:18px 0 8px">最近转换记录</h4>
-      <div id="beverageConversionHistory" style="max-height:190px;overflow:auto;font-size:12px"></div>
     </div>`;
     document.body.appendChild(d);
     $('beverageConversionClose').onclick=()=>d.close();
@@ -47,7 +49,7 @@
     $('beverageConversionWrongLocation').value='fridge';
     $('beverageConversionActualLocation').value='fridge';
     $('beverageConversionNote').value='';
-    preview();loadHistory();
+    preview();
     $('beverageConversionDialog').showModal();
   }
   function preview(){
@@ -56,16 +58,141 @@
       ?'实际库存：'+from.name+' +'+qty+'，'+to.name+' −'+qty+'。月结仍按原 POS 开单品项计算，出库记录保留。'
       :'请选择 POS 品项、实际饮用品项和数量。';
   }
-  async function loadHistory(){
-    $('beverageConversionHistory').textContent='读取中...';
-    const {data,error}=await sb.from('beverage_pos_conversions')
-      .select('id,operation_date,pos_item_id,actual_item_id,quantity,note,created_by')
-      .order('id',{ascending:false}).limit(30);
-    if(error){$('beverageConversionHistory').textContent='读取失败：'+error.message;return;}
-    const names=new Map((typeof allItems!=='undefined'&&Array.isArray(allItems)?allItems:items).map(x=>[String(x.id),x.name]));
-    $('beverageConversionHistory').innerHTML=(data||[]).map(r=>
-      `<div style="padding:7px 0;border-bottom:1px solid #eee">${safe(r.operation_date)}｜${safe(names.get(String(r.pos_item_id))||'原品项')} → ${safe(names.get(String(r.actual_item_id))||'实际品项')}｜${safe(r.quantity)}${r.note?'｜'+safe(r.note):''}</div>`
-    ).join('')||'<span class="hint">暂无转换记录</span>';
+
+  function installHistoryPage(){
+    if(pageInstalled||$('beverageConversionRecords'))return;
+    pageInstalled=true;
+    const host=document.querySelector('.content-area');
+    const nav=document.querySelector('.side-nav');
+    if(!host||!nav){pageInstalled=false;return;}
+    const panel=document.createElement('section');
+    panel.id='beverageConversionRecords';
+    panel.className='panel-anchor';
+    panel.style.display='none';
+    panel.innerHTML=`
+      <div class="section-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div><h2 style="margin-bottom:5px">饮料转换记录</h2>
+          <div class="hint">显示全部转换历史。实际库存按转换调整，月结核对仍按原 POS 品项计算。</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" id="beverageHistoryNew">新增饮料转换</button>
+          <button type="button" id="beverageHistoryRefresh" class="secondary">刷新记录</button>
+        </div>
+      </div>
+      <div class="card" style="margin:14px 0">
+        <div class="grid2" style="align-items:end">
+          <label>开始日期<input type="date" id="beverageHistoryFrom"></label>
+          <label>结束日期<input type="date" id="beverageHistoryTo"></label>
+          <label class="full">搜索饮料、备注或操作人<input id="beverageHistoryKeyword" placeholder="例如：Coke / 无糖 / 员工 Email"></label>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+          <button type="button" class="secondary" id="beverageHistoryClear">清除筛选</button>
+          <button type="button" id="beverageHistorySearch">查询</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-head" style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <h3 style="margin:0">全部转换明细</h3><span id="beverageHistoryCount" class="hint">读取中...</span>
+        </div>
+        <div class="tablewrap" style="max-height:70vh;overflow:auto;margin-top:12px">
+          <table style="min-width:1050px;width:100%">
+            <thead><tr>
+              <th>转换日期</th><th>POS 开成（加回库存）</th>
+              <th>实际喝了（扣库存）</th><th>数量</th>
+              <th>库存调整</th><th>备注</th><th>操作人</th><th>记录时间</th>
+            </tr></thead>
+            <tbody id="beverageHistoryBody"><tr><td colspan="8">读取中...</td></tr></tbody>
+          </table>
+        </div>
+      </div>`;
+    host.appendChild(panel);
+    const a=document.createElement('a');
+    a.href='#beverageConversionRecords';
+    a.innerHTML='<span class="side-icon">⇄</span><span class="side-label">饮料转换记录</span>';
+    a.title='查看全部饮料转换记录';
+    const next=nav.querySelector('a[href="#outNotes"]')||nav.querySelector('a[href="#settings"]');
+    nav.insertBefore(a,next||null);
+    // Integrate with existing wrapped navigation without changing other pages.
+    const oldShowPage=showPage;
+    showPage=function(page){
+      if(page==='beverageConversionRecords'){
+        document.querySelectorAll('.side-nav a[href^="#"]').forEach(link=>{
+          const el=$(link.getAttribute('href').slice(1));
+          if(el)el.style.display='none';
+        });
+        panel.style.display='block';
+        document.querySelectorAll('.side-nav a').forEach(link=>link.classList.toggle('active',link.getAttribute('href')==='#beverageConversionRecords'));
+        window.scrollTo({top:0,behavior:'smooth'});
+        fetchHistory();
+        return;
+      }
+      panel.style.display='none';
+      oldShowPage(page);
+    };
+    a.onclick=e=>{e.preventDefault();showPage('beverageConversionRecords');};
+    $('beverageHistoryNew').onclick=open;
+    $('beverageHistoryRefresh').onclick=()=>fetchHistory();
+    $('beverageHistorySearch').onclick=renderHistory;
+    $('beverageHistoryClear').onclick=()=>{
+      $('beverageHistoryFrom').value='';
+      $('beverageHistoryTo').value='';
+      $('beverageHistoryKeyword').value='';
+      renderHistory();
+    };
+    $('beverageHistoryKeyword').addEventListener('keydown',e=>{if(e.key==='Enter')renderHistory();});
+  }
+  function historyNames(){
+    const list=typeof allItems!=='undefined'&&Array.isArray(allItems)?allItems:items;
+    return new Map(list.map(x=>[String(x.id),String(x.name)]));
+  }
+  async function fetchHistory(){
+    if(fetching||!$('beverageHistoryBody'))return;
+    fetching=true;
+    $('beverageHistoryCount').textContent='正在读取全部记录...';
+    try{
+      const rows=[];
+      for(let offset=0;;offset+=1000){
+        const {data,error}=await sb.from('beverage_pos_conversions')
+          .select('id,operation_date,pos_item_id,actual_item_id,quantity,note,created_by,created_at')
+          .order('id',{ascending:false}).range(offset,offset+999);
+        if(error)throw error;
+        rows.push(...(data||[]));
+        if(!data||data.length<1000)break;
+      }
+      allConversions=rows;
+      renderHistory();
+    }catch(e){
+      $('beverageHistoryCount').textContent='读取失败';
+      $('beverageHistoryBody').innerHTML='<tr><td colspan="8">加载失败：'+safe(e.message||e)+'</td></tr>';
+    }finally{fetching=false;}
+  }
+  function renderHistory(){
+    const body=$('beverageHistoryBody');
+    if(!body)return;
+    const names=historyNames();
+    const from=$('beverageHistoryFrom').value,to=$('beverageHistoryTo').value;
+    const keyword=$('beverageHistoryKeyword').value.trim().toLowerCase();
+    const filtered=allConversions.filter(r=>{
+      if(from&&r.operation_date<from)return false;
+      if(to&&r.operation_date>to)return false;
+      const words=[names.get(String(r.pos_item_id))||'',names.get(String(r.actual_item_id))||'',r.note||'',r.created_by||''].join(' ').toLowerCase();
+      return !keyword||words.includes(keyword);
+    });
+    $('beverageHistoryCount').textContent='共 '+filtered.length+' 条'+(filtered.length!==allConversions.length?'（全部 '+allConversions.length+' 条）':'');
+    body.innerHTML=filtered.map(r=>{
+      const original=names.get(String(r.pos_item_id))||'未知饮料';
+      const actual=names.get(String(r.actual_item_id))||'未知饮料';
+      const qty=Number(r.quantity);
+      const timestamp=r.created_at?new Date(r.created_at).toLocaleString('zh-SG',{timeZone:'Asia/Singapore',hour12:false}):'—';
+      return '<tr>'+
+        '<td>'+safe(r.operation_date)+'</td>'+
+        '<td>'+safe(original)+'</td>'+
+        '<td>'+safe(actual)+'</td>'+
+        '<td>'+safe(qty)+'</td>'+
+        '<td style="white-space:nowrap">'+safe(original)+' +'+safe(qty)+'，'+safe(actual)+' −'+safe(qty)+'</td>'+
+        '<td style="white-space:normal;min-width:180px">'+safe(r.note||'—')+'</td>'+
+        '<td>'+safe(r.created_by||'—')+'</td>'+
+        '<td>'+safe(timestamp)+'</td></tr>';
+    }).join('')||'<tr><td colspan="8" style="text-align:center;padding:20px">暂无符合条件的饮料转换记录</td></tr>';
   }
   async function save(){
     if(saving)return;
@@ -87,6 +214,7 @@
       alert('转换已保存。已加回 POS 误扣饮料，扣减实际饮用饮料；月结仍按照原 POS 开单品项计算。');
       if(typeof loadAll==='function')await loadAll();
       $('beverageConversionDialog').close();
+      if($('beverageConversionRecords')?.style.display!=='none')await fetchHistory();
       if(typeof window.refreshMonthlyReconciliation==='function')window.refreshMonthlyReconciliation();
       if(typeof window.loadMonthlyReconciliation==='function')window.loadMonthlyReconciliation();
     }catch(e){alert('饮料转换保存失败：'+(e.message||e));}
