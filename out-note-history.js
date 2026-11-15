@@ -61,7 +61,8 @@
 
   // Legacy logs have no direct link between a borrow and its return.
   // Match conservatively: identical item, location, borrower identity,
-  // chronological order and quantity. Ambiguous matches stay 待核实.
+  // chronological order and quantity; explicit return-note date points to the borrowing date.
+  // Ambiguous matches stay 待核实.
   function borrowerName(r){
     const raw=parseNote(r).note;
     if(!raw)return '';
@@ -77,6 +78,20 @@
     // Formal titles can vary in hand-written notes; normalize only this
     // conventional suffix, not fuzzy spellings or unrelated people.
     return part.replace(/\s+(?:boss|老板)\s*$/i,'').toLowerCase();
+  }
+
+  // 还回备注中的日期表示原借出日期，例如 Jacky-1/11/26。
+  // 不使用还回日期去猜原借出单；无日期时才使用保守的数量匹配。
+  function referencedBorrowDate(r){
+    if(r.action!=='RETURN')return '';
+    const raw=parseNote(r).note;
+    const match=raw.match(/(?:^|[^\d])(\d{1,2})[\/-](\d{1,2})[\/-](\d{2}|\d{4})(?!\d)/);
+    if(!match)return '';
+    const day=Number(match[1]),month=Number(match[2]);
+    const year=match[3].length===2?2000+Number(match[3]):Number(match[3]);
+    const d=new Date(Date.UTC(year,month-1,day));
+    if(d.getUTCFullYear()!==year||d.getUTCMonth()!==month-1||d.getUTCDate()!==day)return '';
+    return String(year).padStart(4,'0')+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');
   }
 
   function borrowingStatus(allLogs){
@@ -96,7 +111,7 @@
       if(!itemKey||!location||!Number.isFinite(qty)||qty<=0)continue;
       const key=itemKey+'|'+location+'|'+name;
       if(r.action==='BORROW'){
-        const loan={quantity:qty,returned:0,returns:[],name,status:''};
+        const loan={quantity:qty,returned:0,returns:[],name,status:'',borrowDate:dateOf(r)};
         loans.set(String(r.id),loan);
         if(name){
           if(!queues.has(key))queues.set(key,[]);
@@ -104,7 +119,11 @@
         }
       }else{
         // A return without a usable borrower name cannot safely settle a loan.
-        const candidates=(queues.get(key)||[]).filter(x=>x.returned<x.quantity-0.000001);
+        const specifiedDate=referencedBorrowDate(r);
+        const candidates=(queues.get(key)||[]).filter(x=>
+          x.returned<x.quantity-0.000001 &&
+          (!specifiedDate||x.borrowDate===specifiedDate)
+        );
         const exact=candidates.filter(x=>Math.abs((x.quantity-x.returned)-qty)<0.000001);
         // Only attribute a return when one borrower-and-quantity candidate exists.
         if(exact.length===1){
