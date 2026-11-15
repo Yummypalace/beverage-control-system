@@ -5,6 +5,8 @@
   let installed=false;
   let rows=[];
   let loadRunId=0;
+  let verifiedLoans=new Map();
+  let reviewSaving=false;
 
   function h(v=''){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
   function dateOf(r){return r.operation_date||new Date(r.created_at).toLocaleDateString('en-CA',{timeZone:'Asia/Singapore'});}
@@ -164,7 +166,7 @@
       </div>
       <div class="card out-note-card">
         <div class="section-head"><h3>出入库明细</h3></div>
-        <div class="tablewrap out-note-detail-wrap"><table><thead><tr><th>日期</th><th>饮料</th><th>操作</th><th>数量</th><th>位置</th><th>备注</th><th>操作人</th></tr></thead><tbody id="outNoteBody"><tr><td colspan="7">读取中...</td></tr></tbody></table></div>
+        <div class="tablewrap out-note-detail-wrap"><table><thead><tr><th>日期</th><th>饮料</th><th>操作</th><th>数量</th><th>位置</th><th>备注</th><th>操作人</th><th>审核</th></tr></thead><tbody id="outNoteBody"><tr><td colspan="8">读取中...</td></tr></tbody></table></div>
       </div>`;
     content.appendChild(section);
 
@@ -175,6 +177,10 @@
     };
     document.getElementById('outNoteKeyword').addEventListener('keydown',e=>{if(e.key==='Enter')renderRows();});
     document.getElementById('outNoteItemFilter').addEventListener('keydown',e=>{if(e.key==='Enter')renderRows();});
+    document.getElementById('outNoteBody').addEventListener('click',e=>{
+      const btn=e.target.closest('[data-review-borrow]');
+      if(btn)reviewBorrow(Number(btn.dataset.reviewBorrow),btn.dataset.verified!=='true');
+    });
   }
 
   function extendNavigation(){
@@ -230,9 +236,14 @@
     const body=document.getElementById('outNoteBody');if(!body)return;
     const runId=++loadRunId;
     const hadRows=rows.length>0;
-    if(!hadRows)body.innerHTML='<tr><td colspan="7">读取中...</td></tr>';
+    if(!hadRows)body.innerHTML='<tr><td colspan="8">读取中...</td></tr>';
     try{
-      const data=await fetchAllInventoryLogs();
+      const [data,reviewResult]=await Promise.all([
+        fetchAllInventoryLogs(),
+        sb.from('borrow_return_reviews').select('borrow_log_id,verified,reviewed_by,reviewed_at')
+      ]);
+      if(reviewResult.error)throw reviewResult.error;
+      verifiedLoans=new Map((reviewResult.data||[]).filter(x=>x.verified).map(x=>[String(x.borrow_log_id),x]));
       if(runId!==loadRunId)return;
       const loans=borrowingStatus(data);
       const nextRows=data.filter(meaningful).map(r=>{
@@ -255,6 +266,22 @@
         body.innerHTML=`<tr><td colspan="7">读取失败：${h(e.message||e)}</td></tr>`;
       }
     }
+  }
+
+  async function reviewBorrow(id,verified){
+    if(reviewSaving||!Number.isSafeInteger(id)||id<=0)return;
+    const row=rows.find(x=>Number(x.id)===id&&x.action==='BORROW');
+    if(!row)return;
+    if(verified&&!confirm('确认已人工核实这笔借出/还回记录？\\n仅标记审核完成，不会更改库存或出入库记录。'))return;
+    reviewSaving=true;
+    try{
+      const {error}=await sb.rpc('set_borrow_return_review',{p_borrow_log_id:id,p_verified:verified});
+      if(error)throw error;
+      if(verified)verifiedLoans.set(String(id),{reviewed_by:typeof userEmail==='function'?userEmail():'',reviewed_at:new Date().toISOString()});
+      else verifiedLoans.delete(String(id));
+      renderRows();
+    }catch(e){alert('审核状态保存失败：'+String(e.message||e));}
+    finally{reviewSaving=false;}
   }
 
   function populateItems(){
@@ -303,18 +330,24 @@
     body.innerHTML=filtered.map(r=>`<tr data-log-id="${h(r.id||'')}" data-out-type="${h(r.out_type||'')}">
       <td class="out-note-date-cell">${h(r._date)}</td>
       <td class="out-note-item-cell"><b>${h(r.item_name||'')}</b></td>
-      <td class="out-note-action-cell" data-action="${h(r.action||'')}"><span class="pill action-pill action-${h(String(r.action||'').toLowerCase())}">${h(r._actionLabel)}</span>${r.action==='BORROW'?r._loan?.status==='已还'?'<span class="out-note-returned-badge" title="酒水、借出人、位置、数量与日期已匹配">已还</span>':r._loan?.status==='部分已还'?'<span class="out-note-partial-return-badge" title="同一借出人已有部分数量还回">部分已还</span>':r._loan?.status==='待核实'?'<span class="out-note-pending-return-badge" title="已有还回记录，但无法唯一确定对应借出单">待核实</span>':'':''}</td>
+      <td class="out-note-action-cell" data-action="${h(r.action||'')}"><span class="pill action-pill action-${h(String(r.action||'').toLowerCase())}">${h(r._actionLabel)}</span>${r.action==='BORROW'?r._loan?.status==='已还'?'<span class="out-note-returned-badge" title="酒水、借出人、位置、数量与日期已匹配">已还</span>':r._loan?.status==='部分已还'?'<span class="out-note-partial-return-badge" title="同一借出人已有部分数量还回">部分已还</span>':r._loan?.status==='待核实'&&!verifiedLoans.has(String(r.id))?'<span class="out-note-pending-return-badge" title="已有还回记录，但无法唯一确定对应借出单">待核实</span>':'':''}</td>
       <td class="out-note-qty-cell">${Number(r.quantity||0)}</td>
       <td class="out-note-location-cell">${h(r._location||'')}</td>
       <td class="out-note-note-cell">${h(r._businessNote||'')}</td>
       <td class="out-note-user-cell">${h(r.user_email||'')}</td>
-    </tr>`).join('')||'<tr><td colspan="7">暂无有备注的库存操作记录</td></tr>';
+      <td class="out-note-review-cell">${r.action==='BORROW'?(verifiedLoans.has(String(r.id))
+        ?'<span class="out-note-verified" title="审核人：'+h(verifiedLoans.get(String(r.id)).reviewed_by||'')+'">已核实</span> <button type="button" class="secondary" data-review-borrow="'+h(r.id)+'" data-verified="true">取消审核</button>'
+        :r._loan?.status==='待核实'?'<button type="button" class="secondary" data-review-borrow="'+h(r.id)+'" data-verified="false">审核完成</button>':'—'):'—'}</td>
+    </tr>`).join('')||'<tr><td colspan="8">暂无有备注的库存操作记录</td></tr>';
   }
 
   function addStyle(){
     if(document.getElementById('outNoteStyle'))return;
     const s=document.createElement('style');s.id='outNoteStyle';s.textContent=`
 #outNotes .out-note-action-cell{white-space:nowrap!important}
+#outNotes .out-note-review-cell{white-space:nowrap!important;min-width:110px}
+#outNotes .out-note-review-cell button{padding:5px 8px;font-size:12px}
+#outNotes .out-note-verified{font-weight:700;color:#087f5b;font-size:12px}
 #outNotes .out-note-returned-badge,#outNotes .out-note-partial-return-badge{display:inline-flex!important;vertical-align:middle;align-items:center;justify-content:center;margin-left:7px;padding:2px 7px;border-radius:999px;font-size:10px;line-height:1.5;font-weight:700;white-space:nowrap;border:1px solid #c7ebdd;background:#eaf9f2;color:#087f5b}
 #outNotes .out-note-partial-return-badge{border-color:#f8dc9e;background:#fff8e9;color:#986500}
 #outNotes .out-note-pending-return-badge{display:inline-flex!important;vertical-align:middle;align-items:center;margin-left:7px;padding:2px 7px;border:1px solid #d9dfe8;border-radius:999px;background:#f1f4f8;color:#667085;font-size:10px;font-weight:700;white-space:nowrap}
