@@ -120,10 +120,17 @@
       }else{
         // A return without a usable borrower name cannot safely settle a loan.
         const specifiedDate=referencedBorrowDate(r);
-        const candidates=(queues.get(key)||[]).filter(x=>
-          x.returned<x.quantity-0.000001 &&
-          (!specifiedDate||x.borrowDate===specifiedDate)
-        );
+        const openLoans=(queues.get(key)||[]).filter(x=>x.returned<x.quantity-0.000001);
+        const datedLoans=specifiedDate?openLoans.filter(x=>x.borrowDate===specifiedDate):openLoans;
+        // Older narrative notes sometimes state an approximate/incorrect loan date.
+        // Only fall back when no loan exists on that date, one OPEN loan has the
+        // exact remaining quantity, and the note explicitly says it was returned.
+        // Never fall back when the named date matches a loan (even if qty differs).
+        const unambiguousFallback=specifiedDate&&datedLoans.length===0 &&
+          /还回|归还|已还|还来了|returned/i.test(parseNote(r).note)
+          ?openLoans.filter(x=>Math.abs((x.quantity-x.returned)-qty)<0.000001):[];
+        const candidates=datedLoans.length?datedLoans
+          :(unambiguousFallback.length===1?unambiguousFallback:datedLoans);
         const exact=candidates.filter(x=>Math.abs((x.quantity-x.returned)-qty)<0.000001);
         // Only attribute a return when one borrower-and-quantity candidate exists.
         if(exact.length===1){
